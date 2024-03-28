@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import rospy
-from final_prj.msg import Pulse
+
+from turtlebot_autonav.msg import Pulse
 
 pulseRate = 100
 

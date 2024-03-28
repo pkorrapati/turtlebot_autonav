@@ -12,9 +12,9 @@ import rospy
 
 from math import pi, radians, atan2
 
+from turtlebot_autonav.msg import Pulse, MotionCmd
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan, Image, CompressedImage
-from final_prj.msg import Pulse, MotionCmd
 
 import tf2_ros
 import matplotlib.pyplot as plt

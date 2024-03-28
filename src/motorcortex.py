@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-#rostopic pub /motion_cmd final_prj/MotionCmd "lin: 1"
+#rostopic pub /motion_cmd turtlebot_autonav/MotionCmd "lin: 1"
 import rospy
 
-from final_prj.msg import Pulse, MotionCmd
+from turtlebot_autonav.msg import Pulse, MotionCmd
 from geometry_msgs.msg import Twist
 
 # Move to a YAML file if possible
