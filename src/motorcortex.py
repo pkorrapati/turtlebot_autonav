@@ -1,107 +1,57 @@
 #!/usr/bin/env python3
+
+#rostopic pub /motion_cmd final_prj/MotionCmd "lin: 1"
 import rospy
 
+from final_prj.msg import Pulse, MotionCmd
 from geometry_msgs.msg import Twist
 
+# Move to a YAML file if possible
+max_lin_vel = 0.2
+max_rot_vel = 0.2
+
+max_lin_acc = 0.2
+max_rot_acc = 0.2
+
+def limit(value, limitL, limitU):
+    if value > limitU:
+        return limitU
+    elif value < limitL:
+        return limitL
+    
+    return value
+
 class MotorCortex:
-    def __init__(self):
-        # Creates a unique node 'motor_cortex' by using anonymous=True
+    def __init__(self):        
         rospy.init_node('motor_cortex', anonymous=True)
 
-        # Publisher for topic '/cmd_vel'.
-        self.motion_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.vel = Twist()
 
-        self.rate = rospy.Rate(100)   
-        self.isAlive = False     
+        # Subscribers
+        self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.mobilize)
+        self.sub_motion_cmd = rospy.Subscriber('/motion_cmd', MotionCmd, self.set_motion)
+    
+        # Publishers
+        self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
-    def update_pose(self, data):
-        if not self.isAlive:
-            self.isAlive = True
+    def set_motion(self, data):
+        pul = self.pulRate if self.pulRate != 0 else 100
 
-    def traverseCircle(self):
-        """Move in a circle."""
-        
-        # Get the input from the user.        
-        r = rospy.get_param('~r')
-        w = rospy.get_param('~w')
+        if not data.brake:
+            self.vel.linear.x = limit(self.vel.linear.x + (data.lin * max_lin_acc / pul), -max_lin_vel, max_lin_vel)
+            self.vel.angular.z = limit(self.vel.angular.z + (data.rot * max_rot_acc / pul), -max_rot_vel, max_rot_vel)
+        else:
+            self.vel.linear.x = 0
+            self.vel.angular.z = 0
 
-        vel_msg = Twist()
-        
-        rotPeriod = 2*pi/w # Time period to rotate
-
-        # wait for robot to spawn
-        while not self.isAlive:
-            pass
-
-        # Send a stop signal
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-
-        # Angular velocity in the z-axis.
-        vel_msg.angular.x = 0
-        vel_msg.angular.y = 0
-        vel_msg.angular.z = 0
-
-        # Publishing our vel_msg
-        self.velocity_publisher.publish(vel_msg)
-        self.rate.sleep()
-
-        # Using inbuilt function get_time that listens to /clock topic               
-        t_start = rospy.get_time()
-
-        # print(self.tfBuffer.all_frames_as_yaml())
-
-        X =[]
-        Y =[]
-
-        while rospy.get_time() <= t_start + rotPeriod:
-            try:                
-                trans = self.tfBuffer.lookup_transform('odom', 'base_footprint', rospy.Time()) #base_footprint
-                X.extend([trans.transform.translation.x])
-                Y.extend([trans.transform.translation.y])
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                continue
-
-            # Linear velocity in the x-axis.
-            vel_msg.linear.x = w * r
-            vel_msg.linear.y = 0
-            vel_msg.linear.z = 0
-
-            # Angular velocity in the z-axis.
-            vel_msg.angular.x = 0
-            vel_msg.angular.y = 0
-            vel_msg.angular.z = w
-
-            # Publishing our vel_msg
-            self.velocity_publisher.publish(vel_msg)
-
-            # Publish at the desired rate.
-            self.rate.sleep()
-
-        # Stop motion
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-
-        vel_msg.angular.x = 0
-        vel_msg.angular.y = 0
-        vel_msg.angular.z = 0
-        self.velocity_publisher.publish(vel_msg)
-
-        plt.plot(X,Y)
-        plt.title('X-Y location of base_footprint')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.axis('equal')
-        plt.show()
-
-        # If we press control + C, the node will stop.
-        # rospy.spin()
+    def mobilize(self, data):                
+        self.pub_motion.publish(self.vel)     
+        self.pulRate = data.rate   
 
 if __name__ == '__main__':
     try:
-        x = MotorCortex()
-        x.traverseCircle()
+        mNode = MotorCortex()
+        rospy.spin()
+
     except rospy.ROSInterruptException:
         pass

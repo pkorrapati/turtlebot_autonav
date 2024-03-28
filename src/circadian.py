@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rospy
 from final_prj.msg import Pulse
 
@@ -8,28 +10,30 @@ class Circadian:
         # Creates a unique node 'motor_cortex' by using anonymous=True
         rospy.init_node('circadian', anonymous=True)
 
-        # Publisher for topic '/pulse'
-        self.rate_publisher = rospy.Publisher('/pulse', Pulse, queue_size=10)
-
         self.rate = rospy.Rate(beatsPerSecond)
         self.isAlive = False     
         
         self.pulse = Pulse()
         self.pulse.rate = beatsPerSecond
 
-    def stayAlive(self):
+        # Publishers
+        self.pub_rate = rospy.Publisher('/pulse', Pulse, queue_size=10)        
+
+    def stay_alive(self):
         if not self.isAlive:
             self.isAlive = True
 
         while not rospy.is_shutdown():
-            self.rate_publisher.publish(self.pulse)
+            self.pub_rate.publish(self.pulse)
             self.rate.sleep()  
 
         self.isAlive = False      
 
 if __name__ == '__main__':
     try:
-        x = Circadian(pulseRate)
-        x.stayAlive()
+        pul = rospy.get_param('~pulseRate', default=pulseRate)
+        cNode = Circadian(pul)
+        cNode.stay_alive()
+
     except rospy.ROSInterruptException:
         pass

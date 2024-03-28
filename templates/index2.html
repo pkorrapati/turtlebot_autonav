@@ -1,0 +1,119 @@
+<html>
+
+<head>
+    <title>Feed Control</title>
+    <style>
+        .container {
+            display: table;
+        }
+        .row {
+            display: table-row;
+        }
+        .column {
+            display: table-cell;
+        }
+        button {
+            width: 100%;
+        }
+    </style>
+    <script src="//code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script type="text/javascript" charset="utf-8">
+        var inc = 5,
+            h = 45.0,
+            v = 45.0,
+            aMin = [0, 0],
+            aMax = [90, 90];
+
+        var appClock = null;
+
+        var alpha = 0,
+            gamma = 0;
+
+        var limitAngle = function(a, min, max) {
+            return (a < min) ? min : ((a > max) ? max : a);
+        };
+
+        function toPrecision(x, p) {
+            var y = +x + (p === undefined ? 0.5 : p / 2);
+            return y - (y % (p === undefined ? 1 : +p));
+        }
+
+        var updateAngles = function() {
+            $.ajax({
+                type: 'POST',
+                url: 'setServo',
+                data: {
+                    'h': limitAngle(h + alpha, aMin[0], aMax[0]),
+                    'v': limitAngle(v - gamma, aMin[1], aMax[1])
+                }
+            });
+        };
+
+        var motionEvent = function(e) {
+            if (e.gamma >= 0) {
+                alpha = e.alpha > 180 ? (e.alpha - 360) : e.alpha;
+            } else {
+                alpha = e.alpha - 180;
+            }
+
+            gamma = (e.gamma >= 0) ? (e.gamma - 90) : (e.gamma + 90);
+
+            //$('#textVal').text(toPrecision(alpha, 0.5) + ',' + toPrecision(gamma, 0.5));
+        };
+
+        $(document).ready(function() {
+            /*$('#up').on('click', function() {
+                v = limitAngle(v - inc, aMin[1], aMax[1]);
+                updateAngles();
+            });
+            $('#down').on('click', function() {
+                v = limitAngle(v + inc, aMin[1], aMax[1]);
+                updateAngles();
+            });
+            $('#left').on('click', function() {
+                h = limitAngle(h + inc, aMin[0], aMax[0]);
+                updateAngles();
+            });
+            $('#right').on('click', function() {
+                h = limitAngle(h - inc, aMin[0], aMax[0]);
+                updateAngles();
+            });*/
+
+            $('#requestOrientation').on('click', function() {
+                if (window.DeviceOrientationEvent) {
+                    DeviceMotionEvent.requestPermission().then(response => {
+                        if (response == 'granted') {
+                            window.addEventListener('deviceorientation', motionEvent);
+                            $('#requestOrientation').hide();
+                            
+                            if (appClock == null)
+                                appClock = setInterval(updateAngles, 100);
+                        }
+                    }).catch(console.error);
+                }
+            });
+
+            $.ajax({
+                type: 'GET',
+                url: 'getDefaults',
+            }).success(function(data) {
+                console.log(data)
+                h = data['adef'][0],
+                v = data['adef'][1],
+                aMin = data['aMin'],
+                aMax = data['aMax']
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <button type="button" id="requestOrientation">Request</button>    
+    <!--<a id='textVal'>Request</a>-->
+
+
+
+
+</body>
+
+</html>

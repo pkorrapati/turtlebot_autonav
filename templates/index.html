@@ -1,0 +1,42 @@
+<html>
+
+<head>
+    <title>Live Feed</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            background-color: #111;
+        }
+        .main {
+            height: 100%;
+            width: 100%;
+            display: table;
+        }
+        .wrapper {
+            display: table-cell;
+            height: 100%;
+            vertical-align: middle;
+        }
+        img {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            width: 50%;
+            border: 2px solid #EEE
+        }
+    </style>
+    <script src="//code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="main">
+        <div class="wrapper">
+            <img src="{{ url_for('video_feed') }}">
+        </div>
+    </div>
+</body>
+
+</html>

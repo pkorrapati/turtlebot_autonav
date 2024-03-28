@@ -1,140 +1,236 @@
-import cv2
+#!/usr/bin/env python3
+
 import numpy as np
+import cv2
+
+import rospy
 
 # import imagezmq
-
 # import argparse
 # import time
 # import os
 
-
-#!/usr/bin/env python3
-import rospy
-
-from math import pi, radians
+from math import pi, radians, atan2
 
 from geometry_msgs.msg import Twist
-from std_srvs.srv import Empty
-from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan, Image, CompressedImage
+from final_prj.msg import Pulse, MotionCmd
 
 import tf2_ros
 import matplotlib.pyplot as plt
+plt.ion()
+
+plotThings = True
+
+crashDist = 0.3
+tbWidth = 0.2 # TODO Put actual value
 
 # Remaps (-pi/2, pi/2) to (0, 2pi)
 def remapAngle(angle):
     return round((angle + (2*pi)) % (2*pi), 4)
 
-class TurtleBot:
+def extractRanges(ranges, center, Mins, Plus):
+    if (center - Mins) < 0 and (center + Plus) > 0 :
+        return np.hstack((ranges[(center - Mins):], ranges[:(center + Plus)]))
+    else:
+        return np.array(ranges[(center - Mins):(center + Plus)])
+    
+def getCentroid(angles, dists):   
+    angleStep = 1
 
-    def __init__(self):
-        # Creates a node 'turtlebot_circle_driver'. Using anonymous=True makes it unique.
-        rospy.init_node('turtlebot_circle_driver', anonymous=True)
+    areas = np.dot(dists, angleStep)
 
-        # Reset turtlesim by calling the reset service
-        # Not necessary when running from for launch files
-        rospy.wait_for_service('/gazebo/reset_world')
-        resetTurtle = rospy.ServiceProxy('/gazebo/reset_world', Empty)
-        resetTurtle()
+    ac = np.divide(np.multiply(areas, angles).sum(), np.abs(angles).sum())
+    dc = np.divide(np.multiply(areas, np.dot(dists, 0.5)).sum(), dists.sum())
 
-        # Publisher which will publish to the topic '/cmd_vel'.
-        self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=3)
-        self.odom_subscriber = rospy.Subscriber('/odom', Odometry, self.update_pose)
+    return ac, dc
 
-        # Listen to tf frame
-        self.tfBuffer = tf2_ros.Buffer()
-        self.tf_subber = tf2_ros.TransformListener(self.tfBuffer)
+class VisualCortex:
+    def __init__(self):        
+        rospy.init_node('visual_cortex', anonymous=True)
 
-        self.rate = rospy.Rate(100)   
-        self.isAlive = False     
+        # Subscribers
+        self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.analyze)
+        self.sub_lidar = rospy.Subscriber('/scan', LaserScan, self.echo)
+        self.sub_image = rospy.Subscriber('/image', CompressedImage, self.visualize)        
 
-    def update_pose(self, data):
-        if not self.isAlive:
-            self.isAlive = True
+        self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        # self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=3)
 
-    def traverseCircle(self):
-        """Move in a circle."""
+        self.isAwake = False    
+        self.newEcho = False
+        self.refresh = False
+
+        self.fAngle = radians(0)
+        self.rAngle = self.fAngle - radians(90)
+        self.lAngle = self.fAngle + radians(90)
+
+        # Range of front crash angles
+        # crash is largest angle of triangle at smallest distance
+        crashAngle = atan2(tbWidth, (2*crashDist))
         
-        # Get the input from the user.        
-        r = rospy.get_param('~r')
-        w = rospy.get_param('~w')
+        self.fPlus = crashAngle
+        self.fMins = crashAngle
 
-        vel_msg = Twist()
+        self.frontHalfAngles = np.array([])
+        self.frontHalfRanges = np.array([])
+
+        self.vel_msg = Twist()
+
+        if plotThings:            
+            self.fig = plt.figure()
+            self.ax = self.fig.add_subplot(121)
+            self.bx = self.fig.add_subplot(122, projection='polar')
+            
+            self.ax.invert_xaxis()
+            self.bx.set_theta_zero_location("N")            
+            
+            self.distaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4])
+            self.distaPlot2, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'rx')
+            self.obstaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'y.')
+            self.edgeaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'go')
+            
+            self.distbPlot, = self.bx.plot([0, 2*pi], [0,4])
+            self.distbPlot2, = self.bx.plot([0, 2*pi], [0,4], 'rx')
+            self.obstbPlot, = self.bx.plot([0, 2*pi], [0,4], 'y.')
+            self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
+
+    def analyze(self, data):                
+        # self.pub_motion.publish(self.vel)     
+        self.pulRate = data.rate
+
+        if self.newEcho:
+            self.ac, self.dc = getCentroid(self.frontHalfAngles, self.frontHalfRanges)
+
+            # Indexes of edges
+            edges = np.where(self.rangeDiff > 0.15)[0]
+            edges = np.subtract(edges, -1) if len(edges) > 0 else edges
+            segments = []
+
+            # Edges as a list of start and end index
+            for i in range(len(edges)):
+                if i==0:                    
+                    segments = [[0,edges[i]]]
+                else:
+                    segments = np.vstack((segments, [edges[i-1], edges[i]]))
+            
+            segments = np.vstack((segments, [edges[-1], len(self.frontHalfAngles) -1 ]))
+
+            segCents = []
+
+            for segment in segments:                                           
+                acS, dcS = getCentroid(self.frontHalfAngles[segment[0]:segment[1]], self.frontHalfRanges[segment[0]:segment[1]])
+                
+                if len(segCents) == 0:
+                    segCents = [acS, dcS]
+                else:
+                    segCents = np.vstack((segCents, [acS, dcS]))
+            
+            targI = np.argmax(segCents[:,1])
+
+            self.distaPlot.set_xdata(self.frontHalfAngles)
+            self.distaPlot.set_ydata(self.frontHalfRanges)
+
+            self.distbPlot.set_xdata(self.frontHalfAngles)
+            self.distbPlot.set_ydata(self.frontHalfRanges)   
+            
+            self.distaPlot2.set_xdata(segCents[:,0])
+            self.distaPlot2.set_ydata(segCents[:,1]) 
+
+            self.distbPlot2.set_xdata(segCents[:,0])
+            self.distbPlot2.set_ydata(segCents[:,1])   
+
+            self.obstaPlot.set_xdata(self.frontHalfAngles)
+            self.obstaPlot.set_ydata(self.rangeDiff)
+
+            self.obstbPlot.set_xdata(self.frontHalfAngles)
+            self.obstbPlot.set_ydata(self.rangeDiff)
+
+            self.edgeaPlot.set_xdata(self.frontHalfAngles[edges])
+            self.edgeaPlot.set_ydata(self.frontHalfRanges[edges])
+
+            self.edgebPlot.set_xdata(self.frontHalfAngles[edges])
+            self.edgebPlot.set_ydata(self.frontHalfRanges[edges])
+
+            # print(self.crashScan)
+
+            if np.min(self.crashScan) > 0.3:
+                self.vel_msg.linear.x = 0.15                    
+                self.vel_msg.angular.z = -0.02 * segCents[targI, 0]
+            else:
+                self.vel_msg.linear.x = 0
+                self.vel_msg.angular.z = 0.1
+
+            self.newEcho = False
+            self.refresh = True            
+
+        self.pub_motion.publish(self.vel_msg)
+
+    def visualize(self, data):
+        pass
+    
+    def echo(self, data):
+        incAngle = data.angle_increment
+        minAngle = data.angle_min
+                
+        ranges = np.array(data.ranges)
+        count = len(ranges)
         
-        rotPeriod = 2*pi/w # Time period to rotate
+        # Clean up inf in data
+        ranges[np.where(ranges == np.inf)] = 10.0
 
-        # wait for robot to spawn
-        while not self.isAlive:
-            pass
+        # Indices of Left End and Right End of Region of Interest
+        # use these only with data.ranges
 
-        # Send a stop signal
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
+        # TODO : During calibration, we might get offsets for front, left and right cases
+        # update code to handle + and - cases of each angles. Especially front
+        fIndx = round((self.fAngle - minAngle)/incAngle) # Index of heading
+        lIndx = round((self.lAngle - minAngle)/incAngle) # Index of left        
+        rIndx = round((self.rAngle - minAngle)/incAngle) # Index of right        
+        
+        # Front Half Scan Region
+        self.frontHalfRanges = np.hstack((ranges[rIndx:], ranges[:lIndx + 1]))
+        frontHalfCount = len(self.frontHalfRanges) #lIndx - rIndx
 
-        # Angular velocity in the z-axis.
-        vel_msg.angular.x = 0
-        vel_msg.angular.y = 0
-        vel_msg.angular.z = 0
+        # Generate continuous angles from Right to Left
+        if len(self.frontHalfAngles) != frontHalfCount:            
+            self.frontHalfAngles = np.linspace(self.rAngle, self.lAngle, num=frontHalfCount)
+        
+        # ------
+        # Tested till here
+        # ------
 
-        # Publishing our vel_msg
-        self.velocity_publisher.publish(vel_msg)
-        self.rate.sleep()
+        # Front crash region
+        self.fPlusIndx = round(self.fPlus/incAngle)
+        self.fMinsIndx = round(self.fMins/incAngle)
 
-        # Using inbuilt function get_time that listens to /clock topic               
-        t_start = rospy.get_time()
+        # print(fIndx)
+        # print(self.fPlusIndx)
+        # print(self.fMinsIndx)
 
-        # print(self.tfBuffer.all_frames_as_yaml())
+        # front scan
+        self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
+        self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
 
-        X =[]
-        Y =[]
+        self.rangeDiff = np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))
 
-        while rospy.get_time() <= t_start + rotPeriod:
-            try:                
-                trans = self.tfBuffer.lookup_transform('odom', 'base_footprint', rospy.Time()) #base_footprint
-                X.extend([trans.transform.translation.x])
-                Y.extend([trans.transform.translation.y])
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                continue
+        # Zero front index in self.frontHalfRanges
+        # self.zIndx = -rIndx -1
 
-            # Linear velocity in the x-axis.
-            vel_msg.linear.x = w * r
-            vel_msg.linear.y = 0
-            vel_msg.linear.z = 0
-
-            # Angular velocity in the z-axis.
-            vel_msg.angular.x = 0
-            vel_msg.angular.y = 0
-            vel_msg.angular.z = w
-
-            # Publishing our vel_msg
-            self.velocity_publisher.publish(vel_msg)
-
-            # Publish at the desired rate.
-            self.rate.sleep()
-
-        # Stop motion
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-
-        vel_msg.angular.x = 0
-        vel_msg.angular.y = 0
-        vel_msg.angular.z = 0
-        self.velocity_publisher.publish(vel_msg)
-
-        plt.plot(X,Y)
-        plt.title('X-Y location of base_footprint')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.axis('equal')
-        plt.show()
-
-        # If we press control + C, the node will stop.
-        # rospy.spin()
+        # counter = (counter + 1) % 5
+        self.newEcho = True
 
 if __name__ == '__main__':
     try:
-        x = TurtleBot()
-        x.traverseCircle()
+        vNode = VisualCortex()
+
+        while not rospy.is_shutdown():
+            if vNode.refresh:
+                vNode.fig.canvas.draw()
+                vNode.fig.canvas.flush_events()
+
+                plt.subplots_adjust(bottom=0.1, top=0.9)
+                vNode.refresh = False
+        
     except rospy.ROSInterruptException:
         pass
