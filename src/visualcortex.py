@@ -7,9 +7,6 @@ import os
 import rospy
 
 # import imagezmq
-# import argparse
-# import time
-# import os
 
 from math import pi, radians, atan2
 
@@ -23,18 +20,17 @@ import tf2_ros
 import matplotlib.pyplot as plt
 plt.ion()
 
-# This enables plotting
-plotThings = False #True
+''' General Configuration '''
+PLOT_THINGS = True   # This enables plots to be drawn. Default: False
+USE_YOLO_CUDA = True # This enables YOLO-CUDA. Default: True
 
-# This enables YOLO-CUDA
-useYoloCUDA = True 
+''' Turtlebot Parameters '''
+CRASH_DIST = 0.15      # Actual robot is 0.105 in radius
+TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
 
-crashDist = 0.3
-tbWidth = 0.2 # TODO Put actual value
-
-labelsPath = os.path.sep.join(["yolo", "coco.names"])
-configPath = os.path.sep.join(["yolo", "yolov3.cfg"])
-weightsPath = os.path.sep.join(["yolo", "yolov3.weights"])
+''' LIDAR Parameters '''
+LIDAR_INF = 5.0    # LDS-01 LIDAR range is 3.5m max
+MIN_EDGE_WIDTH = 3 # Degrees in cylindrical coordinates
 
 # Remaps (-pi/2, pi/2) to (0, 2pi)
 def remapAngle(angle):
@@ -56,45 +52,53 @@ def getCentroid(angles, dists):
 
     return ac, dc
 
-class VisualCortex:
-    def __init__(self):        
-        rospy.init_node('visual_cortex', anonymous=True)
+def consecutive(data, stepsize=1):
+    return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
 
-        # YOLO part
+class VisualCortex:
+    def __init__(self):
+        ''' Load YOLO START'''
+        labelsPath = os.path.sep.join(["yolo", "coco.names"])
+        configPath = os.path.sep.join(["yolo", "yolov3.cfg"])
+        weightsPath = os.path.sep.join(["yolo", "yolov3.weights"])
+        
         np.random.seed(42)
+
         self.LABELS = open(labelsPath).read().strip().split("\n")
         self.COLORS = np.random.randint(0, 255, size=(len(self.LABELS), 3), dtype="uint8")
 
         self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
 
-        if useYoloCUDA:
+        if USE_YOLO_CUDA:
             self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
             self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
         self.ln = self.net.getLayerNames()
         self.ln = [self.ln[i - 1] for i in self.net.getUnconnectedOutLayers()]
-
-        # Subscribers
+        ''' Load YOLO END'''
+        
+        rospy.init_node('visual_cortex', anonymous=True)
+        
+        ''' Subscribers '''
         self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.analyze)
-        self.sub_lidar = rospy.Subscriber('/scan', LaserScan, self.echo)
-        self.sub_image = rospy.Subscriber('/camera/rgb/image_raw', Image, self.visualize)
+        self.sub_lidar = rospy.Subscriber('/scan', LaserScan, self.echo)        
+        self.sub_image = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, self.visualize)
         # self.sub_image = rospy.Subscriber('/image', CompressedImage, self.visualize)        
 
+        ''' Publishers '''
         self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.pub_image = rospy.Publisher('/image_labl', Image, queue_size=10)
-        # self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=3)
 
         self.isAwake = False    
         self.newEcho = False
         self.refresh = False
-
+        
         self.fAngle = radians(0)
         self.rAngle = self.fAngle - radians(90)
         self.lAngle = self.fAngle + radians(90)
 
         # Range of front crash angles
         # crash is largest angle of triangle at smallest distance
-        crashAngle = atan2(tbWidth, (2*crashDist))
+        crashAngle = atan2(TURTLEBOT_WIDTH, (2*CRASH_DIST))
         
         self.fPlus = crashAngle
         self.fMins = crashAngle
@@ -105,10 +109,14 @@ class VisualCortex:
         self.vel_msg = Twist()
         self.bridge = CvBridge()
 
-        if plotThings:            
+        self.cv_image = np.zeros([5,5])
+
+        if PLOT_THINGS:            
+            
             self.fig = plt.figure()
-            self.ax = self.fig.add_subplot(121)
-            self.bx = self.fig.add_subplot(122, projection='polar')
+            self.ax = self.fig.add_subplot(132)
+            self.bx = self.fig.add_subplot(133, projection='polar')
+            self.cx = self.fig.add_subplot(131).imshow(self.cv_image)
             
             self.ax.invert_xaxis()
             self.bx.set_theta_zero_location("N")            
@@ -129,19 +137,24 @@ class VisualCortex:
         if self.newEcho:
             self.ac, self.dc = getCentroid(self.frontHalfAngles, self.frontHalfRanges)
 
-            # Indexes of edges
-            edges = np.where(self.rangeDiff > 0.15)[0]
-            edges = np.subtract(edges, -1) if len(edges) > 0 else edges
+            cornerIndex = np.where(self.rangeDiff > 0.2)[0] + 1
+            cornerIndex = cornerIndex[np.where(np.diff(cornerIndex) > MIN_EDGE_WIDTH)[0] + 1] # Filters out anomalies < 3 lidar points
+
+            if len(cornerIndex) > 0 and (len(self.frontHalfRanges) - cornerIndex[-1]) <= MIN_EDGE_WIDTH:
+                cornerIndex= cornerIndex[:-1] # Filter out anomalies
+
+            edges = np.split(self.rangeDiff, cornerIndex)
+
             segments = []
 
             # Edges as a list of start and end index
-            for i in range(len(edges)):
+            for i in range(len(cornerIndex)):
                 if i==0:                    
-                    segments = [[0,edges[i]]]
+                    segments = [[0,cornerIndex[i]]]
                 else:
-                    segments = np.vstack((segments, [edges[i-1], edges[i]]))
+                    segments = np.vstack((segments, [cornerIndex[i-1], cornerIndex[i]]))
             
-            segments = np.vstack((segments, [edges[-1], len(self.frontHalfAngles) -1 ]))
+            segments = np.vstack((segments, [cornerIndex[-1], len(self.frontHalfAngles) -1 ]))
 
             segCents = []
 
@@ -155,7 +168,7 @@ class VisualCortex:
             
             targI = np.argmax(segCents[:,1])
 
-            if plotThings:     
+            if PLOT_THINGS:     
                 self.distaPlot.set_xdata(self.frontHalfAngles)
                 self.distaPlot.set_ydata(self.frontHalfRanges)
 
@@ -174,11 +187,11 @@ class VisualCortex:
                 self.obstbPlot.set_xdata(self.frontHalfAngles)
                 self.obstbPlot.set_ydata(self.rangeDiff)
 
-                self.edgeaPlot.set_xdata(self.frontHalfAngles[edges])
-                self.edgeaPlot.set_ydata(self.frontHalfRanges[edges])
+                self.edgeaPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                self.edgeaPlot.set_ydata(self.frontHalfRanges[cornerIndex])
 
-                self.edgebPlot.set_xdata(self.frontHalfAngles[edges])
-                self.edgebPlot.set_ydata(self.frontHalfRanges[edges])
+                self.edgebPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                self.edgebPlot.set_ydata(self.frontHalfRanges[cornerIndex])
 
             if np.min(self.crashScan) > 0.3:
                 self.vel_msg.linear.x = 0.15                    
@@ -192,78 +205,104 @@ class VisualCortex:
 
         # self.pub_motion.publish(self.vel_msg)
 
-    def visualize(self, data):                
+    def visualize(self, data):         
+        # print('image')       
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            cv_image = self.bridge.compressed_imgmsg_to_cv2(data, "rgb8")            
 
-            (H, W) = cv_image.shape[:2]
+            # Move to static
+            # Brute Force matcher
+            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+
+            orb = cv2.ORB_create()
+
+            ref_cv_image = cv2.imread('memory/stop.png', 0)
+            kp1, des1 = orb.detectAndCompute(ref_cv_image, None)            
+  
             
-            blob = cv2.dnn.blobFromImage(cv_image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
-            self.net.setInput(blob)            
-            layerOutputs = self.net.forward(self.ln)       
+            # kp = orb.detect(cv_image, None)
+            kp, desc = orb.detectAndCompute(cv_image, None)
+  
+            matches = bf.match(des1, desc)
             
-            boxes = []
-            confidences = []
-            classIDs = []
+            # cv_image = cv2.drawMatches(ref_cv_image, kp1, cv_image, kp, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-            # loop over each of the layer outputs
-            for output in layerOutputs:
-                # loop over each of the detections
-                for detection in output:
-                    # extract the class ID and confidence (i.e., probability)
-                    # of the current object detection
-                    scores = detection[5:]
-                    classID = np.argmax(scores)
-                    confidence = scores[classID]
+            cv_image = cv2.drawKeypoints(cv_image, kp, None, color=(0,255,0), flags=0)
 
-                    # filter out weak predictions by ensuring the detected
-                    # probability is greater than the minimum probability
-                    if confidence > 0.5:
-                        # scale the bounding box coordinates back relative to
-                        # the size of the image, keeping in mind that YOLO
-                        # actually returns the center (x, y)-coordinates of
-                        # the bounding box followed by the boxes' width and
-                        # height
-                        box = detection[0:4] * np.array([W, H, W, H])
-                        (centerX, centerY, width, height) = box.astype("int")
 
-                        # use the center (x, y)-coordinates to derive the top
-                        # and and left corner of the bounding box
-                        x = int(centerX - (width / 2))
-                        y = int(centerY - (height / 2))
+            # (H, W) = cv_image.shape[:2]
+            
+            # blob = cv2.dnn.blobFromImage(cv_image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+            # self.net.setInput(blob)            
+            # layerOutputs = self.net.forward(self.ln)       
+            
+            # boxes = []
+            # confidences = []
+            # classIDs = []
 
-                        # update our list of bounding box coordinates,
-                        # confidences, and class IDs
-                        boxes.append([x, y, int(width), int(height)])
-                        confidences.append(float(confidence))
-                        classIDs.append(classID)
+            # # loop over each of the layer outputs
+            # for output in layerOutputs:
+            #     # loop over each of the detections
+            #     for detection in output:
+            #         # extract the class ID and confidence (i.e., probability)
+            #         # of the current object detection
+            #         scores = detection[5:]
+            #         classID = np.argmax(scores)
+            #         confidence = scores[classID]
 
-            # apply non-maxima suppression to suppress weak, overlapping
-            # bounding boxes
-            idxs = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.3)
+            #         # filter out weak predictions by ensuring the detected
+            #         # probability is greater than the minimum probability
+            #         if confidence > 0.5:
+            #             # scale the bounding box coordinates back relative to
+            #             # the size of the image, keeping in mind that YOLO
+            #             # actually returns the center (x, y)-coordinates of
+            #             # the bounding box followed by the boxes' width and
+            #             # height
+            #             box = detection[0:4] * np.array([W, H, W, H])
+            #             (centerX, centerY, width, height) = box.astype("int")
 
-            # ensure at least one detection exists
-            if len(idxs) > 0:
-                # loop over the indexes we are keeping
-                for i in idxs.flatten():
-                    # extract the bounding box coordinates
-                    (x, y) = (boxes[i][0], boxes[i][1])
-                    (w, h) = (boxes[i][2], boxes[i][3])
+            #             # use the center (x, y)-coordinates to derive the top
+            #             # and and left corner of the bounding box
+            #             x = int(centerX - (width / 2))
+            #             y = int(centerY - (height / 2))
 
-                    # draw a bounding box rectangle and label on the frame
-                    color = [int(c) for c in self.COLORS[classIDs[i]]]
-                    cv2.rectangle(cv_image, (x, y), (x + w, y + h), color, 2)
-                    # text = "{}: {:.4f}".format(self.LABELS[classIDs[i]],	confidences[i])
-                    text = self.LABELS[classIDs[i]]
-                    cv2.putText(cv_image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            #             # update our list of bounding box coordinates,
+            #             # confidences, and class IDs
+            #             boxes.append([x, y, int(width), int(height)])
+            #             confidences.append(float(confidence))
+            #             classIDs.append(classID)
+
+            # # apply non-maxima suppression to suppress weak, overlapping
+            # # bounding boxes
+            # idxs = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.3)
+
+            # # ensure at least one detection exists
+            # if len(idxs) > 0:
+            #     # loop over the indexes we are keeping
+            #     for i in idxs.flatten():
+            #         # extract the bounding box coordinates
+            #         (x, y) = (boxes[i][0], boxes[i][1])
+            #         (w, h) = (boxes[i][2], boxes[i][3])
+
+            #         # draw a bounding box rectangle and label on the frame
+            #         color = [int(c) for c in self.COLORS[classIDs[i]]]
+            #         cv2.rectangle(cv_image, (x, y), (x + w, y + h), color, 2)
+            #         # text = "{}: {:.4f}".format(self.LABELS[classIDs[i]],	confidences[i])
+            #         text = self.LABELS[classIDs[i]]
+            #         cv2.putText(cv_image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
             # Send labeled image 
-            image_message = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
-            self.pub_image.publish(image_message)
+            # image_message = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+            # self.pub_image.publish(image_message)
+
+            # if plotThings:
+            self.cv_image = cv_image                                                
+                # self.cx.imshow(cv_image)
 
         except CvBridgeError as e:
             print(e)
-
+        
         # cv2.imshow("Image window", cv_image)
     
     def echo(self, data):
@@ -271,16 +310,12 @@ class VisualCortex:
         minAngle = data.angle_min
                 
         ranges = np.array(data.ranges)
-        count = len(ranges)
-        
-        # Clean up inf in data
-        ranges[np.where(ranges == np.inf)] = 10.0
+            
+        # Clean up INF in data
+        ranges[np.where(ranges == np.inf)] = LIDAR_INF
 
         # Indices of Left End and Right End of Region of Interest
-        # use these only with data.ranges
-
-        # TODO : During calibration, we might get offsets for front, left and right cases
-        # update code to handle + and - cases of each angles. Especially front
+        # use these only with data.ranges                
         fIndx = round((self.fAngle - minAngle)/incAngle) # Index of heading
         lIndx = round((self.lAngle - minAngle)/incAngle) # Index of left        
         rIndx = round((self.rAngle - minAngle)/incAngle) # Index of right        
@@ -305,7 +340,8 @@ class VisualCortex:
         self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
         self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
 
-        self.rangeDiff = np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))
+        self.rangeDiff = np.abs(np.diff(self.frontHalfRanges))
+        # np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))
 
         # Zero front index in self.frontHalfRanges
         # self.zIndx = -rIndx -1
@@ -318,7 +354,10 @@ if __name__ == '__main__':
         vNode = VisualCortex()
 
         while not rospy.is_shutdown():
-            if vNode.refresh and plotThings:
+            if vNode.refresh and PLOT_THINGS:
+                vNode.cx.set_data(vNode.cv_image)
+                vNode.cx.autoscale()
+
                 vNode.fig.canvas.draw()
                 vNode.fig.canvas.flush_events()
 
