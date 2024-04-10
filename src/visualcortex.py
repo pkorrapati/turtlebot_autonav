@@ -8,7 +8,7 @@ import rospy
 
 # import imagezmq
 
-from math import pi, radians, atan2
+from math import pi, radians, atan2, atan, degrees
 
 from turtlebot_autonav.msg import Pulse, MotionCmd
 from geometry_msgs.msg import Twist
@@ -25,12 +25,16 @@ PLOT_THINGS = True   # This enables plots to be drawn. Default: False
 USE_YOLO_CUDA = True # This enables YOLO-CUDA. Default: True
 
 ''' Turtlebot Parameters '''
-CRASH_DIST = 0.15      # Actual robot is 0.105 in radius
-TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
+# CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
+CRASH_DIST = 0.40      # Actual robot is 0.105 in radius
+# TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
+TURTLEBOT_WIDTH = 0.40 # Actual robot wheel to wheel width is 0.178
+CRASH_ANGLE = atan2(TURTLEBOT_WIDTH, (2 * CRASH_DIST))
 
 ''' LIDAR Parameters '''
-LIDAR_INF = 5.0    # LDS-01 LIDAR range is 3.5m max
-MIN_EDGE_WIDTH = 3 # Degrees in cylindrical coordinates
+LIDAR_INF = 5.0        # LDS-01 LIDAR range is 3.5m max
+LIDAR_EDGE_DEPTH = 0.2
+MIN_EDGE_WIDTH = 3     # Degrees in cylindrical coordinates
 
 # Remaps (-pi/2, pi/2) to (0, 2pi)
 def remapAngle(angle):
@@ -48,19 +52,39 @@ def getCentroid(angles, dists):
     areas = np.dot(dists, angleStep)
 
     ac = np.divide(np.multiply(areas, angles).sum(), np.abs(angles).sum())
-    dc = np.divide(np.multiply(areas, np.dot(dists, 0.5)).sum(), dists.sum())
+    dc = dists.mean()
+    # dc = np.divide(np.multiply(areas, np.dot(dists, 0.5)).sum(), dists.sum())
 
     return ac, dc
 
 def consecutive(data, stepsize=1):
     return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
 
+def cylToCart(angles, dists):
+    X = np.multiply(dists, np.cos(angles))
+    Y = np.multiply(dists, np.sin(angles))
+
+    return X, Y
+
+def fitLine(X, Y):
+    A = np.vstack([X, np.ones(len(X))]).T
+
+    m,c = np.linalg.lstsq(A, Y, rcond=0)[0]
+    return [1, -m, -c]
+
 class VisualCortex:
     def __init__(self):
+        # Brute Force matcher
+        self.orb = cv2.ORB_create(50)
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        
+        self.stopSignMemory = cv2.imread('memory/stop.png', 0)           
+        self.memoryKP, self.memoryDesc = self.orb.detectAndCompute(self.stopSignMemory, None) 
+        
         ''' Load YOLO START'''
-        labelsPath = os.path.sep.join(["yolo", "coco.names"])
-        configPath = os.path.sep.join(["yolo", "yolov3.cfg"])
-        weightsPath = os.path.sep.join(["yolo", "yolov3.weights"])
+        labelsPath = os.path.sep.join(["memory", "coco.names"])
+        configPath = os.path.sep.join(["memory", "yolov3.cfg"])
+        weightsPath = os.path.sep.join(["memory", "yolov3.weights"])
         
         np.random.seed(42)
 
@@ -82,8 +106,8 @@ class VisualCortex:
         ''' Subscribers '''
         self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.analyze)
         self.sub_lidar = rospy.Subscriber('/scan', LaserScan, self.echo)        
-        self.sub_image = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, self.visualize)
-        # self.sub_image = rospy.Subscriber('/image', CompressedImage, self.visualize)        
+        # self.sub_image = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, self.visualize)
+        # self.sub_image = rospy.Subscriber('/camera/image', Image, self.visualize)        
 
         ''' Publishers '''
         self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -98,10 +122,9 @@ class VisualCortex:
 
         # Range of front crash angles
         # crash is largest angle of triangle at smallest distance
-        crashAngle = atan2(TURTLEBOT_WIDTH, (2*CRASH_DIST))
-        
-        self.fPlus = crashAngle
-        self.fMins = crashAngle
+                
+        self.fPlus = CRASH_ANGLE
+        self.fMins = CRASH_ANGLE
 
         self.frontHalfAngles = np.array([])
         self.frontHalfRanges = np.array([])
@@ -111,8 +134,7 @@ class VisualCortex:
 
         self.cv_image = np.zeros([5,5])
 
-        if PLOT_THINGS:            
-            
+        if PLOT_THINGS: 
             self.fig = plt.figure()
             self.ax = self.fig.add_subplot(132)
             self.bx = self.fig.add_subplot(133, projection='polar')
@@ -124,26 +146,45 @@ class VisualCortex:
             self.distaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4])
             self.distaPlot2, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'rx')
             self.obstaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'y.')
-            self.edgeaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'go')
+            # self.edgeaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'go')
             
             self.distbPlot, = self.bx.plot([0, 2*pi], [0,4])
             self.distbPlot2, = self.bx.plot([0, 2*pi], [0,4], 'rx')
             self.obstbPlot, = self.bx.plot([0, 2*pi], [0,4], 'y.')
-            self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
+            # self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
 
-    def analyze(self, data):                        
+    def analyze(self, data):       
+                     
         self.pulRate = data.rate
 
         if self.newEcho:
             self.ac, self.dc = getCentroid(self.frontHalfAngles, self.frontHalfRanges)
 
-            cornerIndex = np.where(self.rangeDiff > 0.2)[0] + 1
-            cornerIndex = cornerIndex[np.where(np.diff(cornerIndex) > MIN_EDGE_WIDTH)[0] + 1] # Filters out anomalies < 3 lidar points
+            cornerIndex = np.where(self.rangeDiff > LIDAR_EDGE_DEPTH)[0] + 1
+            # cInd1 = np.sort(np.unique(np.append(cornerIndex, [0, len(self.frontHalfRanges)])))
+            # print(cornerIndex)
 
-            if len(cornerIndex) > 0 and (len(self.frontHalfRanges) - cornerIndex[-1]) <= MIN_EDGE_WIDTH:
-                cornerIndex= cornerIndex[:-1] # Filter out anomalies
+            # cornerIndex = cornerIndex[np.where(np.diff(cornerIndex) > MIN_EDGE_WIDTH)[0] + 1] # Filters out anomalies < 3 lidar points
+
+            # print(cornerIndex)
+
+            # if len(cornerIndex) > 0 and (len(self.frontHalfRanges) - cornerIndex[-1]) <= MIN_EDGE_WIDTH:
+            #     cornerIndex= cornerIndex[:-1] # Filter out anomalies
 
             edges = np.split(self.rangeDiff, cornerIndex)
+            
+            strCorners=np.array([])
+            endCorners=np.array([])
+
+            if len(cornerIndex) > 0:
+                strCorners = np.append([0], cornerIndex)
+                endCorners = np.append(cornerIndex -1, [len(self.frontHalfAngles)])
+
+            # print(strCorners)
+            # print(endCorners)
+
+            ''' If obstacles are too close, dynamic thresh will not find a way out'''
+            # DYNAMIC_THRESHOLD = 2
 
             segments = []
 
@@ -175,27 +216,37 @@ class VisualCortex:
                 self.distbPlot.set_xdata(self.frontHalfAngles)
                 self.distbPlot.set_ydata(self.frontHalfRanges)   
                 
-                self.distaPlot2.set_xdata(segCents[:,0])
-                self.distaPlot2.set_ydata(segCents[:,1]) 
+                self.distaPlot2.set_xdata(self.ac)
+                self.distaPlot2.set_ydata(self.dc) 
 
-                self.distbPlot2.set_xdata(segCents[:,0])
-                self.distbPlot2.set_ydata(segCents[:,1])   
+                self.distbPlot2.set_xdata(self.ac)
+                self.distbPlot2.set_ydata(self.dc)   
 
-                self.obstaPlot.set_xdata(self.frontHalfAngles)
-                self.obstaPlot.set_ydata(self.rangeDiff)
+                # self.distaPlot2.set_xdata(segCents[:,0])
+                # self.distaPlot2.set_ydata(segCents[:,1]) 
 
-                self.obstbPlot.set_xdata(self.frontHalfAngles)
-                self.obstbPlot.set_ydata(self.rangeDiff)
+                # self.distbPlot2.set_xdata(segCents[:,0])
+                # self.distbPlot2.set_ydata(segCents[:,1])   
 
-                self.edgeaPlot.set_xdata(self.frontHalfAngles[cornerIndex])
-                self.edgeaPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+                # self.obstaPlot.set_xdata(self.frontHalfAngles[:-1])
+                # self.obstaPlot.set_ydata(self.rangeDiff)
 
-                self.edgebPlot.set_xdata(self.frontHalfAngles[cornerIndex])
-                self.edgebPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+                # self.obstbPlot.set_xdata(self.frontHalfAngles[:-1])
+                # self.obstbPlot.set_ydata(self.rangeDiff)
 
-            if np.min(self.crashScan) > 0.3:
+                # self.edgeaPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                # self.edgeaPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+
+                # self.edgebPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                # self.edgebPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+
+            print(np.min(self.crashScan))
+
+            if np.min(self.crashScan) > CRASH_DIST:
                 self.vel_msg.linear.x = 0.15                    
-                self.vel_msg.angular.z = -0.02 * segCents[targI, 0]
+                # self.vel_msg.angular.z = -0.02 * self.ac #segCents[targI, 0]
+                self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
+                self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
             else:
                 self.vel_msg.linear.x = 0
                 self.vel_msg.angular.z = 0.1
@@ -203,32 +254,20 @@ class VisualCortex:
             self.newEcho = False
             self.refresh = True            
 
-        # self.pub_motion.publish(self.vel_msg)
+        self.pub_motion.publish(self.vel_msg)
 
     def visualize(self, data):         
         # print('image')       
         try:
-            # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            cv_image = self.bridge.compressed_imgmsg_to_cv2(data, "rgb8")            
-
-            # Move to static
-            # Brute Force matcher
-            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-            orb = cv2.ORB_create()
-
-            ref_cv_image = cv2.imread('memory/stop.png', 0)
-            kp1, des1 = orb.detectAndCompute(ref_cv_image, None)            
-  
+            # # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            # cv_image = self.bridge.compressed_imgmsg_to_cv2(data, "rgb8")            
             
-            # kp = orb.detect(cv_image, None)
-            kp, desc = orb.detectAndCompute(cv_image, None)
-  
-            matches = bf.match(des1, desc)
+            # kp, desc = self.orb.detectAndCompute(cv_image, None)  
+            # matches = self.bf.match(self.memoryDesc, desc)
             
-            # cv_image = cv2.drawMatches(ref_cv_image, kp1, cv_image, kp, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            # cv_image = cv2.drawMatches(self.stopSignMemory, self.memoryKP, cv_image, kp, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-            cv_image = cv2.drawKeypoints(cv_image, kp, None, color=(0,255,0), flags=0)
+            # # cv_image = cv2.drawKeypoints(cv_image, kp, None, color=(0,255,0), flags=0)
 
 
             # (H, W) = cv_image.shape[:2]
@@ -305,7 +344,7 @@ class VisualCortex:
         
         # cv2.imshow("Image window", cv_image)
     
-    def echo(self, data):
+    def echo(self, data):        
         incAngle = data.angle_increment
         minAngle = data.angle_min
                 
@@ -313,6 +352,7 @@ class VisualCortex:
             
         # Clean up INF in data
         ranges[np.where(ranges == np.inf)] = LIDAR_INF
+        ranges[np.where(ranges == 0)] = LIDAR_INF
 
         # Indices of Left End and Right End of Region of Interest
         # use these only with data.ranges                
@@ -339,6 +379,12 @@ class VisualCortex:
         # front scan
         self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
         self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
+        print(self.crashScan)
+
+        X, Y = cylToCart(self.crashRegion, self.crashScan)
+        wall_eq = fitLine(X, Y)
+
+        print(degrees((pi/2)- atan(-wall_eq[1])))
 
         self.rangeDiff = np.abs(np.diff(self.frontHalfRanges))
         # np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))
@@ -347,7 +393,7 @@ class VisualCortex:
         # self.zIndx = -rIndx -1
 
         # counter = (counter + 1) % 5
-        self.newEcho = True
+        self.newEcho = True        
 
 if __name__ == '__main__':
     try:
@@ -362,7 +408,7 @@ if __name__ == '__main__':
                 vNode.fig.canvas.flush_events()
 
                 plt.subplots_adjust(bottom=0.1, top=0.9)
-                vNode.refresh = False
+                vNode.refresh = False                
         
     except rospy.ROSInterruptException:
         pass
