@@ -4,8 +4,8 @@ import imagezmq
 
 ipAddr = socket.gethostbyname(socket.gethostname())
 
-hub = imagezmq.ImageHub(open_port='tcp://'+ ipAddr +':5555', REQ_REP=False)
-# hub = imagezmq.ImageHub(open_port='tcp://localhost:5555', REQ_REP=False)
+hub = imagezmq.ImageHub(open_port='tcp://10.121.34.110:5555', REQ_REP=False)
+# hub = imagezmq.ImageHub(open_port='tcp://'+ ipAddr +':5555', REQ_REP=False)
 # hub = imagezmq.ImageHub()   
 
 while True:
