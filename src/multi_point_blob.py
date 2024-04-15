@@ -23,24 +23,42 @@ class Controller:
         self.errorSignal=0
         self.errorSignal_1=0
         self.errorSignal_2=0
-        self.TARGET = 90
+        self.TARGET = 87
         ##GAINS##
-        P_GAIN = 4
+        P_GAIN = 13
         I_GAIN = .4
-        D_GAIN = .7
+        D_GAIN = 3
         self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
         self.K_TWO = -P_GAIN + -2 * D_GAIN
         self.K_THREE = D_GAIN
     def steer(self,input):
+        if np.abs(self.errorSignal)>20:
+            P_GAIN=40
+            I_GAIN=0.001
+            D_GAIN=0.2
+            self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
+            self.K_TWO = -P_GAIN + -2 * D_GAIN
+            self.K_THREE = D_GAIN
+            print("HighGain")
+        else:
+            P_GAIN = 13
+            I_GAIN = .4
+            D_GAIN = 3
+            self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
+            self.K_TWO = -P_GAIN + -2 * D_GAIN
+            self.K_THREE = D_GAIN
+            print("LowGAIN")
         output=self.errorSignal * self.K_ONE + self.errorSignal_1 * self.K_TWO + self.errorSignal_2 * self.K_THREE#output signal for discrete PID
         self.errorSignal_2 = self.errorSignal_1#Errors for discrete PID
         self.errorSignal_1 = self.errorSignal
         self.errorSignal = input - self.TARGET 
+        print("Error:")
+        print(self.errorSignal)
         return output
 class Turtlebot_Movement:
     def __init__(self):
         rospy.init_node('line_recognition=.py', anonymous=True)
-        self.rate = rospy.Rate(30)#Sets refresh rate
+        self.rate = rospy.Rate(60)#Sets refresh rate
         self.pub = rospy.Publisher('/cmd_vel',Twist, queue_size=10)#Publisher Node
         self.sub = rospy.Subscriber('/camera/image',Image,self.Move)
         self.bridge = CvBridge()#CvBridge Function
@@ -69,11 +87,11 @@ class Turtlebot_Movement:
         # self.path_coeff = polynomial.fit(x_coords,y_coords,deg=1)
         # self.path = polynomial(self.path_coeff)
         z_msg = self.Angle()
-        self.vel_msg.linear.x=0.15
+        self.vel_msg.linear.x=0.04
         self.vel_msg.angular.z=z_msg
     def Frame_Slicer(self,image_stream):#Rewrite this to be more general
-        top_slice = Line_Tracker(.5,.6,image_stream,"top centroid")
-        middle_slice = Line_Tracker(.6,.8,image_stream,"middle centroid")
+        top_slice = Line_Tracker(.6,.7,image_stream,"top centroid")
+        middle_slice = Line_Tracker(.8,.9,image_stream,"middle centroid")
         bottom_slice = Line_Tracker(.9,1,image_stream,'bottom centroid')
         self.top_centroid_x, self.top_centroid_y, self.current_frame = top_slice.centroid_posistion()
         self.middle_centroid_x,self.middle_centroid_y, trashThis = middle_slice.centroid_posistion()
@@ -85,7 +103,7 @@ class Turtlebot_Movement:
         cv2.waitKey(1)
     def Angle(self):
         control_signals=[self.short_angle_controller.steer(self.path_angle[1]), self.mid_angle_controller.steer(self.path_angle[2]),self.long_angle_controller.steer(self.path_angle[3])]
-        output=np.deg2rad(np.average(control_signals,weights=[1,5,5]))
+        output=np.deg2rad(np.average(control_signals,weights=[5,2,5]))
         print(control_signals, output)
         return output
     def Shutdown(self):
@@ -105,8 +123,8 @@ class Line_Tracker:
    kernel_blur = np.array([[1/9,1/9,1/9],
                             [1/9,1/9,1/9],
                             [1/9,1/9,1/9]])
-   blue_lower = np.array([0,0,0])
-   blue_upper = np.array([109,255,255])
+   blue_lower = np.array([20,0,0])
+   blue_upper = np.array([100,255,255])
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function
@@ -119,7 +137,7 @@ class Line_Tracker:
    def centroid_locate(self):
        current_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2HSV)#Converts to HSV
        self.height, self.width, channels = current_frame.shape#Gets dimensions of the image
-       crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.3*self.width):int(0.7*self.width)]#Crops images down
+       crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.3*self.width):int(0.96*self.width)]#Crops images down
     #    cv2.imshow(self.output_name+self.output_name,crop)
     #    cv2.waitKey(1)
        mask=cv2.inRange(crop,self.blue_lower,self.blue_upper)#Generates mask to exclude non-blue regions
@@ -131,10 +149,12 @@ class Line_Tracker:
             self.cx, self.cy = m['m10']/m['m00'], m['m01']/m['m00']
        except ZeroDivisionError:
             self.cx, self.cy = self.height/2, self.width/2
+       #print("Mask"+self.output_name+":")
+       #print(self.cx)
        if np.sum(mask)<100:
            self.cx=0
        cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(255,255,255),-1)
-       #cv2.imshow(self.output_name,mask)
+       cv2.imshow(self.output_name,mask)
        #cv2.waitKey(1)
    def centroid_posistion(self):
       self.centroid_locate()
