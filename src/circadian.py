@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-
 import rospy
 
 from turtlebot_autonav.msg import Pulse
 
-pulseRate = 100
+PULSE_RATE = 100
 
 class Circadian:
     def __init__(self, beatsPerSecond=100):
@@ -18,7 +17,7 @@ class Circadian:
         self.pulse.rate = beatsPerSecond
 
         # Publishers
-        self.pub_rate = rospy.Publisher('/pulse', Pulse, queue_size=10)        
+        self.pub_rate = rospy.Publisher('/pulse', Pulse, queue_size=5)        
 
     def stay_alive(self):
         if not self.isAlive:
@@ -32,7 +31,7 @@ class Circadian:
 
 if __name__ == '__main__':
     try:
-        pul = rospy.get_param('~pulseRate', default=pulseRate)
+        pul = rospy.get_param('~pulseRate', default=PULSE_RATE)
         cNode = Circadian(pul)
         cNode.stay_alive()
 

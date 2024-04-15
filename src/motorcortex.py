@@ -7,8 +7,8 @@ from turtlebot_autonav.msg import Pulse, MotionCmd
 from geometry_msgs.msg import Twist
 
 # Move to a YAML file if possible
-max_lin_vel = 0.2
-max_rot_vel = 0.2
+MAX_LIN_VELOCITY = 0.2
+MAX_ROT_VELOCITY = 2.84
 
 max_lin_acc = 0.2
 max_rot_acc = 0.2
@@ -38,8 +38,8 @@ class MotorCortex:
         pul = self.pulRate if self.pulRate != 0 else 100
 
         if not data.brake:
-            self.vel.linear.x = limit(self.vel.linear.x + (data.lin * max_lin_acc / pul), -max_lin_vel, max_lin_vel)
-            self.vel.angular.z = limit(self.vel.angular.z + (data.rot * max_rot_acc / pul), -max_rot_vel, max_rot_vel)
+            self.vel.linear.x = limit(self.vel.linear.x + (data.lin * max_lin_acc / pul), -MAX_LIN_VELOCITY, MAX_LIN_VELOCITY)
+            self.vel.angular.z = limit(self.vel.angular.z + (data.rot * max_rot_acc / pul), -MAX_ROT_VELOCITY, MAX_ROT_VELOCITY)
         else:
             self.vel.linear.x = 0
             self.vel.angular.z = 0
