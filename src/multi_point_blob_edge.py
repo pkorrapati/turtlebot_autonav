@@ -23,31 +23,31 @@ class Controller:
         self.errorSignal=0
         self.errorSignal_1=0
         self.errorSignal_2=0
-        self.TARGET = 90
+        self.TARGET = 87
         ##GAINS##
-        P_GAIN = 5
+        P_GAIN = 13
         I_GAIN = .4
-        D_GAIN = .8
+        D_GAIN = 3
         self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
         self.K_TWO = -P_GAIN + -2 * D_GAIN
         self.K_THREE = D_GAIN
     def steer(self,input):
-        #if np.abs(self.errorSignal)>45:
-            # P_GAIN=20
-            # I_GAIN=0.001
-            # D_GAIN=8
-            # self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
-            # self.K_TWO = -P_GAIN + -2 * D_GAIN
-            # self.K_THREE = D_GAIN
-            # print("HighGain")
-       # else:
-            # P_GAIN = 5
-            # I_GAIN = .4
-            # D_GAIN = .4
-            # self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
-            # self.K_TWO = -P_GAIN + -2 * D_GAIN
-            # self.K_THREE = D_GAIN
-            # print("LowGAIN")
+        if np.abs(self.errorSignal)>45:
+            P_GAIN=20
+            I_GAIN=0.001
+            D_GAIN=.04
+            self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
+            self.K_TWO = -P_GAIN + -2 * D_GAIN
+            self.K_THREE = D_GAIN
+            print("HighGain")
+        else:
+            P_GAIN = 5
+            I_GAIN = .4
+            D_GAIN = .4
+            self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
+            self.K_TWO = -P_GAIN + -2 * D_GAIN
+            self.K_THREE = D_GAIN
+            print("LowGAIN")
         output=self.errorSignal * self.K_ONE + self.errorSignal_1 * self.K_TWO + self.errorSignal_2 * self.K_THREE#output signal for discrete PID
         self.errorSignal_2 = self.errorSignal_1#Errors for discrete PID
         self.errorSignal_1 = self.errorSignal
@@ -87,18 +87,15 @@ class Turtlebot_Movement:
         # self.path_coeff = polynomial.fit(x_coords,y_coords,deg=1)
         # self.path = polynomial(self.path_coeff)
         z_msg = self.Angle()
-        self.vel_msg.linear.x=0.12
-        self.vel_msg.angular.z=z_msg
-        if self.missing_lower:
-            self.vel_msg.angular.z=.4
-            self.vel_msg.linear.x=0.01
+        # self.vel_msg.linear.x=0.06
+        # self.vel_msg.angular.z=z_msg
     def Frame_Slicer(self,image_stream):#Rewrite this to be more general
         top_slice = Line_Tracker(.6,.7,image_stream,"top centroid")
         middle_slice = Line_Tracker(.8,.9,image_stream,"middle centroid")
         bottom_slice = Line_Tracker(.9,1,image_stream,'bottom centroid')
-        self.top_centroid_x, self.top_centroid_y, self.current_frame, rubbish = top_slice.centroid_posistion()
-        self.middle_centroid_x,self.middle_centroid_y, trashThis, junk = middle_slice.centroid_posistion()
-        self.bottom_centroid_x,self.bottom_centroid_y, whyWasteMemory, self.missing_lower = bottom_slice.centroid_posistion()
+        self.top_centroid_x, self.top_centroid_y, self.current_frame = top_slice.centroid_posistion()
+        self.middle_centroid_x,self.middle_centroid_y, trashThis = middle_slice.centroid_posistion()
+        self.bottom_centroid_x,self.bottom_centroid_y, whyWasteMemory = bottom_slice.centroid_posistion()
         cv2.circle(self.current_frame,(int(self.top_centroid_x), int(self.top_centroid_y)), 5,(245,10,10),-1)
         cv2.circle(self.current_frame,(int(self.middle_centroid_x), int(self.middle_centroid_y)), 5,(10,240,10),-1)
         cv2.circle(self.current_frame,(int(self.bottom_centroid_x), int(self.bottom_centroid_y)), 5,(10,10,255),-1)
@@ -123,11 +120,9 @@ class Line_Tracker:
                               [-1,0,16,0,-1],
                               [-1,0,0,0,-1],
                               [-1,-1,-1,-1,-1]])
-   kernel_blur = np.array([[1/9,1/9,1/9],
-                            [1/9,1/9,1/9],
-                            [1/9,1/9,1/9]])
+   kernel_blur = 1/25*(np.ones((5,5)))
    blue_lower = np.array([20,0,0])
-   blue_upper = np.array([40,255,200])
+   blue_upper = np.array([55,255,200])
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function
@@ -136,17 +131,37 @@ class Line_Tracker:
        self.image_stream = image_stream
        self.output_name = output_name
        self.current_frame = self.bridge.imgmsg_to_cv2(self.image_stream) #Imports Current Image
-       #self.current_frame = cv2.normalize(self.current_frame, None,30,170)
        #cv2.imshow("Original",self.current_frame)
    def centroid_locate(self):
-       current_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2HSV)#Converts to HSV
+       cv2.imshow("Frame",self.current_frame)
+       #cv2.waitKey(1)
+       b,g,r = cv2.split(self.current_frame)
+       cv2.imshow("Blue",b)
+       cv2.imshow("Red",r)
+       cv2.imshow("Green",g)
+       cv2.waitKey(1)
+       r=np.array(r)
+       r=(.25*r)
+       r=r.astype(int)
+       g=np.array(g)
+       g=(g*1.25)
+       g=g.astype(int)
+       
+       current_frame=cv2.merge([b,g,r])
+       current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2HSV)#Converts to HSV
        self.height, self.width, channels = current_frame.shape#Gets dimensions of the image
        crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.*self.width):int(0.96*self.width)]#Crops images down
     #    cv2.imshow(self.output_name+self.output_name,crop)
     #    cv2.waitKey(1)
+       blur=cv2.filter2D(current_frame,ddepth=-1,kernel= self.kernel_blur)
+       h,s,v1 = cv2.split(blur)
+       edge_img=cv2.filter2D(v1,ddepth=-1,kernel = self.kernel_edge_5)
+       cv2.imshow("Stuff",blur)
+       edge_img=edge_img[int(self.height*.5):int(self.height*1),int(0.*self.width):int(0.96*self.width)]#Crops images down
+       cv2.imshow("Edges",edge_img)
        mask=cv2.inRange(crop,self.blue_lower,self.blue_upper)#Generates mask to exclude non-blue regions
        edge_img=cv2.bitwise_and(crop,crop,mask=mask)#Maskes image
-       edge_img=cv2.filter2D(edge_img,ddepth=-1,kernel = self.kernel_edge_5)#Uses 5x5 edge detection filter
+       edge_img=cv2.filter2D(edge_img,ddepth=-1,kernel = self.kernel_edge_3)#Uses 5x5 edge detection filter
        ret,edge_threshold=cv2.threshold(edge_img,30,255,cv2.THRESH_BINARY)
        m = cv2.moments(mask, False)
        try:
@@ -155,18 +170,16 @@ class Line_Tracker:
             self.cx, self.cy = self.width/2, self.height/2
        #print("Mask"+self.output_name+":")
        #print(self.cx)
+       if np.sum(mask)<10:
+           self.cx=150
        cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(120,120,120),-1)
        cv2.imshow(self.output_name,mask)
-       if np.sum(mask)<100:
-           self.missingLower = True
-       else:
-           self.missingLower = False
        #cv2.waitKey(1)
    def centroid_posistion(self):
       self.centroid_locate()
       absolute_pos_y= self.cy+(self.height*self.lower_bound_decimal)
       absolute_pos_x=self.cx+(self.width*0.)
-      return absolute_pos_x, absolute_pos_y,self.current_frame, self.missingLower
+      return absolute_pos_x, absolute_pos_y,self.current_frame
 if __name__ == '__main__':
     try:
         lf=Turtlebot_Movement()
