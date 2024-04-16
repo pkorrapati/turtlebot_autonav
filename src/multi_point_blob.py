@@ -87,7 +87,7 @@ class Turtlebot_Movement:
         # self.path_coeff = polynomial.fit(x_coords,y_coords,deg=1)
         # self.path = polynomial(self.path_coeff)
         z_msg = self.Angle()
-        self.vel_msg.linear.x=0.12
+        self.vel_msg.linear.x=0.06
         self.vel_msg.angular.z=z_msg
         if self.missing_lower:
             self.vel_msg.angular.z=.4
@@ -127,7 +127,7 @@ class Line_Tracker:
                             [1/9,1/9,1/9],
                             [1/9,1/9,1/9]])
    blue_lower = np.array([20,0,0])
-   blue_upper = np.array([40,255,200])
+   blue_upper = np.array([35,200,150])
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function
@@ -139,7 +139,7 @@ class Line_Tracker:
        #self.current_frame = cv2.normalize(self.current_frame, None,30,170)
        #cv2.imshow("Original",self.current_frame)
    def centroid_locate(self):
-       current_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2HSV)#Converts to HSV
+       current_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2HSV)#Converts to HSV
        self.height, self.width, channels = current_frame.shape#Gets dimensions of the image
        crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.*self.width):int(0.96*self.width)]#Crops images down
     #    cv2.imshow(self.output_name+self.output_name,crop)
