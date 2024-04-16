@@ -270,50 +270,50 @@ class VisualCortex:
             self.newEcho = False
             self.refresh = True            
 
-        # self.pub_motion.publish(self.vel_msg)
+        self.pub_motion.publish(self.vel_msg)
 
     def visualize(self, data):         
         # print('image')       
         try:
-            ballLower = (0, 47, 0)
-            ballUpper = (86, 255,255)
+            # ballLower = (0, 47, 0)
+            # ballUpper = (86, 255,255)
             
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             
-            c_img = cv_image[230:, :] if cv_image.shape[0] >= 233 else cv_image
+            # c_img = cv_image[230:, :] if cv_image.shape[0] >= 233 else cv_image
 
-            # processed = cv2.GaussianBlur(cv_image, (11, 11), 0)
-            processed = cv2.GaussianBlur(c_img, (11, 11), 0)        
+            # # processed = cv2.GaussianBlur(cv_image, (11, 11), 0)
+            # processed = cv2.GaussianBlur(c_img, (11, 11), 0)        
 
-            # processed = cv2.GaussianBlur(cv_image[395:466, :], (11, 11), 0)        
-            processed = cv2.cvtColor(processed, cv2.COLOR_BGR2HSV)
+            # # processed = cv2.GaussianBlur(cv_image[395:466, :], (11, 11), 0)        
+            # processed = cv2.cvtColor(processed, cv2.COLOR_BGR2HSV)
 
-            lineMask = cv2.inRange(processed, ballLower, ballUpper)
-            lineMask = cv2.dilate(lineMask, None, iterations=2)            
-            lineMask = cv2.erode(lineMask, None, iterations=2)
+            # lineMask = cv2.inRange(processed, ballLower, ballUpper)
+            # lineMask = cv2.dilate(lineMask, None, iterations=2)            
+            # lineMask = cv2.erode(lineMask, None, iterations=2)
 
-            lIm, lineContours = cv2.findContours(lineMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            
+            # lIm, lineContours = cv2.findContours(lineMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            
             
-            tg_x = 160
-            # tg_y = dcB["m01"] / dcB["m00"]
+            # tg_x = 160
+            # # tg_y = dcB["m01"] / dcB["m00"]
 
-            if len(lIm):
-                line = max(lIm, key=cv2.contourArea)            
-                cv2.drawContours(c_img, line, -1, (0,255,0))
+            # if len(lIm):
+            #     line = max(lIm, key=cv2.contourArea)            
+            #     cv2.drawContours(c_img, line, -1, (0,255,0))
 
-                dcB = cv2.moments(line)
+            #     dcB = cv2.moments(line)
             
-                if dcB["m00"] != 0:       
-                    tg_x = dcB["m10"] / dcB["m00"]
-                    # tg_y = dcB["m01"] / dcB["m00"]             
-                    # cv2.circle(c_img, (int(tg_x), int(tg_y)), int(5), (0,255,255), 2)
+            #     if dcB["m00"] != 0:       
+            #         tg_x = dcB["m10"] / dcB["m00"]
+            #         # tg_y = dcB["m01"] / dcB["m00"]             
+            #         # cv2.circle(c_img, (int(tg_x), int(tg_y)), int(5), (0,255,255), 2)
             
-            if np.min(self.crashScan) > CRASH_DIST:
-                self.vel_msg.linear.x = 0.1
-                self.vel_msg.angular.z = 0.003 * (160 - tg_x)
-                # self.vel_msg.angular.z = 0.008 * (160 - tg_x)
+            # if np.min(self.crashScan) > CRASH_DIST:
+            #     self.vel_msg.linear.x = 0.1
+            #     self.vel_msg.angular.z = 0.003 * (160 - tg_x)
+            #     # self.vel_msg.angular.z = 0.008 * (160 - tg_x)
             
-            self.pub_motion.publish(self.vel_msg)
+            # self.pub_motion.publish(self.vel_msg)
 
             # cv_image = self.bridge.compressed_imgmsg_to_cv2(data, "rgb8")            
             
@@ -408,6 +408,7 @@ class VisualCortex:
         # Clean up INF in data
         ranges[np.where(ranges == np.inf)] = LIDAR_INF
         ranges[np.where(ranges == 0)] = LIDAR_INF
+        ranges[np.where(ranges == np.NaN)] = LIDAR_INF
 
         # Indices of Left End and Right End of Region of Interest
         # use these only with data.ranges                
