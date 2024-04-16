@@ -32,18 +32,18 @@ class Controller:
         self.K_TWO = -P_GAIN + -2 * D_GAIN
         self.K_THREE = D_GAIN
     def steer(self,input):
-        if np.abs(self.errorSignal)>20:
-            P_GAIN=40
+        if np.abs(self.errorSignal)>45:
+            P_GAIN=20
             I_GAIN=0.001
-            D_GAIN=0.2
+            D_GAIN=.04
             self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
             self.K_TWO = -P_GAIN + -2 * D_GAIN
             self.K_THREE = D_GAIN
             print("HighGain")
         else:
-            P_GAIN = 13
+            P_GAIN = 5
             I_GAIN = .4
-            D_GAIN = 3
+            D_GAIN = .4
             self.K_ONE = P_GAIN + I_GAIN + D_GAIN#Gains for discrete PID
             self.K_TWO = -P_GAIN + -2 * D_GAIN
             self.K_THREE = D_GAIN
@@ -87,7 +87,7 @@ class Turtlebot_Movement:
         # self.path_coeff = polynomial.fit(x_coords,y_coords,deg=1)
         # self.path = polynomial(self.path_coeff)
         z_msg = self.Angle()
-        self.vel_msg.linear.x=0.04
+        self.vel_msg.linear.x=0.06
         self.vel_msg.angular.z=z_msg
     def Frame_Slicer(self,image_stream):#Rewrite this to be more general
         top_slice = Line_Tracker(.6,.7,image_stream,"top centroid")
@@ -103,7 +103,7 @@ class Turtlebot_Movement:
         cv2.waitKey(1)
     def Angle(self):
         control_signals=[self.short_angle_controller.steer(self.path_angle[1]), self.mid_angle_controller.steer(self.path_angle[2]),self.long_angle_controller.steer(self.path_angle[3])]
-        output=np.deg2rad(np.average(control_signals,weights=[5,2,5]))
+        output=np.deg2rad(np.average(control_signals,weights=[3,1,5]))
         print(control_signals, output)
         return output
     def Shutdown(self):
@@ -124,7 +124,7 @@ class Line_Tracker:
                             [1/9,1/9,1/9],
                             [1/9,1/9,1/9]])
    blue_lower = np.array([20,0,0])
-   blue_upper = np.array([100,255,255])
+   blue_upper = np.array([95,255,255])
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function
@@ -137,7 +137,7 @@ class Line_Tracker:
    def centroid_locate(self):
        current_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2HSV)#Converts to HSV
        self.height, self.width, channels = current_frame.shape#Gets dimensions of the image
-       crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.3*self.width):int(0.96*self.width)]#Crops images down
+       crop = current_frame[int(self.height*self.upper_bound_decimal):int(self.height*self.lower_bound_decimal),int(0.*self.width):int(0.96*self.width)]#Crops images down
     #    cv2.imshow(self.output_name+self.output_name,crop)
     #    cv2.waitKey(1)
        mask=cv2.inRange(crop,self.blue_lower,self.blue_upper)#Generates mask to exclude non-blue regions
@@ -148,18 +148,18 @@ class Line_Tracker:
        try:
             self.cx, self.cy = m['m10']/m['m00'], m['m01']/m['m00']
        except ZeroDivisionError:
-            self.cx, self.cy = self.height/2, self.width/2
+            self.cx, self.cy = self.width/2, self.height/2
        #print("Mask"+self.output_name+":")
        #print(self.cx)
-       if np.sum(mask)<100:
-           self.cx=0
-       cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(255,255,255),-1)
+       if np.sum(mask)<10:
+           self.cx=150
+       cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(120,120,120),-1)
        cv2.imshow(self.output_name,mask)
        #cv2.waitKey(1)
    def centroid_posistion(self):
       self.centroid_locate()
       absolute_pos_y= self.cy+(self.height*self.lower_bound_decimal)
-      absolute_pos_x=self.cx+(self.width*0.3)
+      absolute_pos_x=self.cx+(self.width*0.)
       return absolute_pos_x, absolute_pos_y,self.current_frame
 if __name__ == '__main__':
     try:
