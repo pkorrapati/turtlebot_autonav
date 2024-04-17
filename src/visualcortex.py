@@ -11,7 +11,7 @@ import rospy
 from math import pi, radians, atan2, atan, degrees
 
 from turtlebot_autonav.msg import Pulse, MotionCmd
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Quaternion
 from sensor_msgs.msg import LaserScan, Image, CompressedImage
 
 from cv_bridge import CvBridge, CvBridgeError
@@ -86,9 +86,35 @@ def fitLine(X, Y):
     m,c = np.linalg.lstsq(A, Y, rcond=0)[0]
     return [1, -m, -c]
 
+def getRotation(q):    
+    return np.array([[q.w**2 + q.x**2 - q.y**2 -q.z**2, 2 * q.x * q.y - 2 * q.w * q.z],
+                     [   2 * q.x * q.y + 2 * q.w * q.z, q.w**2 - q.x**2 + q.y**2 -q.z**2 ]])    
+
+def getTransform(x,y, q):
+    R = getRotation(q)    
+    T = np.eye(3)
+
+    T[:2, :2] = R
+    T[:2, 2] = [x, y]
+
+    return T
+
+def matInv(Tr):
+    R_inv = Tr[:2, :2].T
+    t_inv = np.dot(-1, np.dot(R_inv, Tr[:2, 2]))
+
+    Tr_inv = np.eye(3)
+    Tr_inv[:2, :2] = R_inv
+    Tr_inv[:2, 2] = t_inv
+
+    return Tr_inv
+
 class VisualCortex:
     def __init__(self):
         # Brute Force matcher
+        self.isAlive = False
+        self.plotSet = False
+
         self.orb = cv2.ORB_create(50)
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         
@@ -148,6 +174,36 @@ class VisualCortex:
 
         self.cv_image = np.zeros([5,5])
 
+        # Listen to tf frame
+        self.tfBuffer = tf2_ros.Buffer()
+        self.tf_subber = tf2_ros.TransformListener(self.tfBuffer)
+
+        q = Quaternion()
+        q.z = 1
+
+        self.iniPose = getTransform(0,0,q)
+        self.pose = getTransform(0,0,q)
+        self.dest = getTransform(0,0,q)
+
+        self.reachedDestination = False
+        self.hasDesitination = False
+
+        poseSet = False
+
+        while not poseSet:
+            try:
+                transform = self.tfBuffer.lookup_transform('odom', 'base_footprint', rospy.Time()).transform #base_footprint
+                self.iniPose = getTransform(transform.translation.x, transform.translation.y, transform.rotation)
+                self.pose = self.iniPose
+                
+                poseSet = True
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                continue
+        
+        dist = [0.4, 0, 1]               
+        self.dest = np.dot(self.pose, dist)
+        self.hasDesitination = True
+        
         if PLOT_THINGS: 
             self.fig = plt.figure()
             self.ax = self.fig.add_subplot(132)
@@ -167,9 +223,28 @@ class VisualCortex:
             self.obstbPlot, = self.bx.plot([0, 2*pi], [0,4], 'y.')
             self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
 
+            self.plotSet = True
+
+        self.isAlive = True
+
     def analyze(self, data):       
                      
         self.pulRate = data.rate
+
+        if self.isAlive:        
+            transform = self.tfBuffer.lookup_transform('odom', 'base_footprint', rospy.Time()).transform #base_footprint        
+            pose = getTransform(transform.translation.x, transform.translation.y, transform.rotation)        
+            self.pose = np.dot(matInv(self.iniPose), pose)
+
+            if self.hasDesitination and not self.reachedDestination:
+                # print('enabled')
+                differ = np.dot(matInv(self.pose), self.dest)
+
+                print(differ[0])
+
+                if (np.abs(differ[0])) < 0.02: 
+                    self.reachedDestination = True
+                    print('reached')
 
         if self.newEcho:
             self.ac, self.dc = getCentroid(self.frontHalfAngles, self.frontHalfRanges)
@@ -217,14 +292,14 @@ class VisualCortex:
                 acS, dcS = getCentroid(self.frontHalfAngles[segment[0]:segment[1]], self.frontHalfRanges[segment[0]:segment[1]])
                 
                 if len(segCents) == 0:
-                    segCents = [acS, dcS]
+                    segCents = [acS, dcS, len(self.frontHalfAngles[segment[0]:segment[1]])]
                 else:
-                    segCents = np.vstack((segCents, [acS, dcS]))
+                    segCents = np.vstack((segCents, [acS, dcS, self.frontHalfAngles[segment[0]:segment[1]]]))
             
             targI = np.argmax(segCents[:,1])
-            targA = np.argmax(np.multiply(segCents[:,1], segCents[:,0]))
+            # targA = np.argmax(np.multiply(segCents[:,1], segCents[:,2]))
 
-            if PLOT_THINGS:     
+            if PLOT_THINGS and self.plotSet:     
                 self.distaPlot.set_xdata(self.frontHalfAngles)
                 self.distaPlot.set_ydata(self.frontHalfRanges)
 
@@ -258,12 +333,16 @@ class VisualCortex:
             # print(np.min(self.crashScan))
 
             if np.min(self.crashScan) > CRASH_DIST:
+                # if not self.reachedDestination:
+                    # self.vel_msg.linear.x = 0.05
+                    # self.vel_msg.angular.z = 0
+                # else:
                 self.vel_msg.linear.x = 0.15                    
-                # self.vel_msg.angular.z = -0.02 * self.ac #segCents[targI, 0]
-                # self.vel_msg.angular.z = 0.2 * self.ac #segCents[targI, 0]
+                    # self.vel_msg.angular.z = -0.02 * self.ac #segCents[targI, 0]
+                    # self.vel_msg.angular.z = 0.2 * self.ac #segCents[targI, 0]
                 self.vel_msg.angular.z = 1.6 * self.ac #segCents[targI, 0]
-                # self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
-                # self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
+                    # self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
+                    # self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
             else:
                 # print('crash')
                 self.vel_msg.linear.x = 0
@@ -461,7 +540,7 @@ if __name__ == '__main__':
         vNode = VisualCortex()
 
         while not rospy.is_shutdown():
-            if vNode.refresh and PLOT_THINGS:
+            if vNode.refresh and PLOT_THINGS and vNode.plotSet:
                 vNode.cx.set_data(vNode.cv_image)
                 vNode.cx.autoscale()
 
