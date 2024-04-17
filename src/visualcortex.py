@@ -124,7 +124,7 @@ class VisualCortex:
         # self.sub_image = rospy.Subscriber('/camera/image', Image, self.visualize)        
 
         ''' Publishers '''
-        self.pub_motion = rospy.Publisher('/cmd_vel_obstacle', Twist, queue_size=10)
+        self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
         self.isAwake = False    
         self.newEcho = False
@@ -455,16 +455,7 @@ if __name__ == '__main__':
     try:
         vNode = VisualCortex()
 
-        while not rospy.is_shutdown():
-            if vNode.refresh and PLOT_THINGS:
-                vNode.cx.set_data(vNode.cv_image)
-                vNode.cx.autoscale()
-
-                vNode.fig.canvas.draw()
-                vNode.fig.canvas.flush_events()
-
-                plt.subplots_adjust(bottom=0.1, top=0.9)
-                vNode.refresh = False                
+        rospy.spin()            
         
     except rospy.ROSInterruptException:
         pass
