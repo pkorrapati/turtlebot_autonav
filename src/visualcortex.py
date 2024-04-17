@@ -21,8 +21,8 @@ import matplotlib.pyplot as plt
 plt.ion()
 
 ''' General Configuration '''
-PLOT_THINGS = True   # This enables plots to be drawn. Default: False
-USE_YOLO_CUDA = True # This enables YOLO-CUDA. Default: True
+PLOT_THINGS = False   # This enables plots to be drawn. Default: False
+USE_YOLO_CUDA = False # This enables YOLO-CUDA. Default: True
 
 ''' Turtlebot Parameters '''
 # CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
@@ -33,8 +33,22 @@ CRASH_ANGLE = atan2(TURTLEBOT_WIDTH, (2 * CRASH_DIST))
 
 ''' LIDAR Parameters '''
 LIDAR_INF = 5.0        # LDS-01 LIDAR range is 3.5m max
-LIDAR_EDGE_DEPTH = 0.2
+LIDAR_EDGE_DEPTH = 0.2 # To identify continuous vs discontinuous edges
 MIN_EDGE_WIDTH = 3     # Degrees in cylindrical coordinates
+
+# H_Mat = [[-65.5424,    1.5083,  301.0359],
+#          [1.3490,  -17.1878,  566.0193],
+#          [0.0000,    0.0000,    1.0000]]
+
+''' Entity Scaling '''
+H_scale = np.array([[-0.2371,    0.3775,          0.1890],
+                    [-0.1575,   -0.00093736,     -0.8607],
+                    [-0.0015,    0.0000071814,    0.0012]])
+
+''' Image Unravel '''
+H_flat = np.array([[-0.00058790,   -0.0008264,    0.3784],
+                   [-0.000036335,   -0.0029,        0.8956],
+                   [-0.00000005875,-0.000002559,  0.00060561]])
 
 # Remaps (-pi/2, pi/2) to (0, 2pi)
 def remapAngle(angle):
@@ -81,25 +95,25 @@ class VisualCortex:
         self.stopSignMemory = cv2.imread('memory/stop.png', 0)           
         self.memoryKP, self.memoryDesc = self.orb.detectAndCompute(self.stopSignMemory, None) 
         
-        ''' Load YOLO START'''
-        labelsPath = os.path.sep.join(["memory", "coco.names"])
-        configPath = os.path.sep.join(["memory", "yolov3.cfg"])
-        weightsPath = os.path.sep.join(["memory", "yolov3.weights"])
+        # ''' Load YOLO START'''
+        # labelsPath = os.path.sep.join(["memory", "coco.names"])
+        # configPath = os.path.sep.join(["memory", "yolov3.cfg"])
+        # weightsPath = os.path.sep.join(["memory", "yolov3.weights"])
         
-        np.random.seed(42)
+        # np.random.seed(42)
 
-        self.LABELS = open(labelsPath).read().strip().split("\n")
-        self.COLORS = np.random.randint(0, 255, size=(len(self.LABELS), 3), dtype="uint8")
+        # self.LABELS = open(labelsPath).read().strip().split("\n")
+        # self.COLORS = np.random.randint(0, 255, size=(len(self.LABELS), 3), dtype="uint8")
 
-        self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
+        # self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
 
-        if USE_YOLO_CUDA:
-            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        # if USE_YOLO_CUDA:
+        #     self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        #     self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-        self.ln = self.net.getLayerNames()
-        self.ln = [self.ln[i - 1] for i in self.net.getUnconnectedOutLayers()]
-        ''' Load YOLO END'''
+        # self.ln = self.net.getLayerNames()
+        # self.ln = [self.ln[i - 1] for i in self.net.getUnconnectedOutLayers()]
+        # ''' Load YOLO END'''
         
         rospy.init_node('visual_cortex', anonymous=True)
         
@@ -146,12 +160,12 @@ class VisualCortex:
             self.distaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4])
             self.distaPlot2, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'rx')
             self.obstaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'y.')
-            # self.edgeaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'go')
+            self.edgeaPlot, = self.ax.plot([self.rAngle, self.lAngle], [0,4], 'go')
             
             self.distbPlot, = self.bx.plot([0, 2*pi], [0,4])
             self.distbPlot2, = self.bx.plot([0, 2*pi], [0,4], 'rx')
             self.obstbPlot, = self.bx.plot([0, 2*pi], [0,4], 'y.')
-            # self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
+            self.edgebPlot, = self.bx.plot([0, 2*pi], [0,4], 'go')
 
     def analyze(self, data):       
                      
@@ -222,11 +236,11 @@ class VisualCortex:
                 self.distbPlot2.set_xdata(self.ac)
                 self.distbPlot2.set_ydata(self.dc)   
 
-                # self.distaPlot2.set_xdata(segCents[:,0])
-                # self.distaPlot2.set_ydata(segCents[:,1]) 
+                self.distaPlot2.set_xdata(segCents[:,0])
+                self.distaPlot2.set_ydata(segCents[:,1]) 
 
-                # self.distbPlot2.set_xdata(segCents[:,0])
-                # self.distbPlot2.set_ydata(segCents[:,1])   
+                self.distbPlot2.set_xdata(segCents[:,0])
+                self.distbPlot2.set_ydata(segCents[:,1])   
 
                 # self.obstaPlot.set_xdata(self.frontHalfAngles[:-1])
                 # self.obstaPlot.set_ydata(self.rangeDiff)
@@ -234,19 +248,21 @@ class VisualCortex:
                 # self.obstbPlot.set_xdata(self.frontHalfAngles[:-1])
                 # self.obstbPlot.set_ydata(self.rangeDiff)
 
-                # self.edgeaPlot.set_xdata(self.frontHalfAngles[cornerIndex])
-                # self.edgeaPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+                self.edgeaPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                self.edgeaPlot.set_ydata(self.frontHalfRanges[cornerIndex])
 
-                # self.edgebPlot.set_xdata(self.frontHalfAngles[cornerIndex])
-                # self.edgebPlot.set_ydata(self.frontHalfRanges[cornerIndex])
+                self.edgebPlot.set_xdata(self.frontHalfAngles[cornerIndex])
+                self.edgebPlot.set_ydata(self.frontHalfRanges[cornerIndex])
 
-            print(np.min(self.crashScan))
+            # print(np.min(self.crashScan))
 
             if np.min(self.crashScan) > CRASH_DIST:
                 self.vel_msg.linear.x = 0.15                    
                 # self.vel_msg.angular.z = -0.02 * self.ac #segCents[targI, 0]
-                self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
-                self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
+                # self.vel_msg.angular.z = 0.2 * self.ac #segCents[targI, 0]
+                self.vel_msg.angular.z = 1.6 * self.ac #segCents[targI, 0]
+                # self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
+                # self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
             else:
                 self.vel_msg.linear.x = 0
                 self.vel_msg.angular.z = 0.1
@@ -259,7 +275,46 @@ class VisualCortex:
     def visualize(self, data):         
         # print('image')       
         try:
-            # # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            # ballLower = (0, 47, 0)
+            # ballUpper = (86, 255,255)
+            
+            # cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            
+            # c_img = cv_image[230:, :] if cv_image.shape[0] >= 233 else cv_image
+
+            # # processed = cv2.GaussianBlur(cv_image, (11, 11), 0)
+            # processed = cv2.GaussianBlur(c_img, (11, 11), 0)        
+
+            # # processed = cv2.GaussianBlur(cv_image[395:466, :], (11, 11), 0)        
+            # processed = cv2.cvtColor(processed, cv2.COLOR_BGR2HSV)
+
+            # lineMask = cv2.inRange(processed, ballLower, ballUpper)
+            # lineMask = cv2.dilate(lineMask, None, iterations=2)            
+            # lineMask = cv2.erode(lineMask, None, iterations=2)
+
+            # lIm, lineContours = cv2.findContours(lineMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            
+            
+            # tg_x = 160
+            # # tg_y = dcB["m01"] / dcB["m00"]
+
+            # if len(lIm):
+            #     line = max(lIm, key=cv2.contourArea)            
+            #     cv2.drawContours(c_img, line, -1, (0,255,0))
+
+            #     dcB = cv2.moments(line)
+            
+            #     if dcB["m00"] != 0:       
+            #         tg_x = dcB["m10"] / dcB["m00"]
+            #         # tg_y = dcB["m01"] / dcB["m00"]             
+            #         # cv2.circle(c_img, (int(tg_x), int(tg_y)), int(5), (0,255,255), 2)
+            
+            # if np.min(self.crashScan) > CRASH_DIST:
+            #     self.vel_msg.linear.x = 0.1
+            #     self.vel_msg.angular.z = 0.003 * (160 - tg_x)
+            #     # self.vel_msg.angular.z = 0.008 * (160 - tg_x)
+            
+            # self.pub_motion.publish(self.vel_msg)
+
             # cv_image = self.bridge.compressed_imgmsg_to_cv2(data, "rgb8")            
             
             # kp, desc = self.orb.detectAndCompute(cv_image, None)  
@@ -336,7 +391,7 @@ class VisualCortex:
             # self.pub_image.publish(image_message)
 
             # if plotThings:
-            self.cv_image = cv_image                                                
+            self.cv_image = cv_image.copy()                                                
                 # self.cx.imshow(cv_image)
 
         except CvBridgeError as e:
@@ -353,6 +408,7 @@ class VisualCortex:
         # Clean up INF in data
         ranges[np.where(ranges == np.inf)] = LIDAR_INF
         ranges[np.where(ranges == 0)] = LIDAR_INF
+        ranges[np.where(ranges == np.NaN)] = LIDAR_INF
 
         # Indices of Left End and Right End of Region of Interest
         # use these only with data.ranges                
@@ -379,12 +435,12 @@ class VisualCortex:
         # front scan
         self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
         self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
-        print(self.crashScan)
+        # print(self.crashScan)
 
         X, Y = cylToCart(self.crashRegion, self.crashScan)
         wall_eq = fitLine(X, Y)
 
-        print(degrees((pi/2)- atan(-wall_eq[1])))
+        # print(degrees((pi/2)- atan(-wall_eq[1])))
 
         self.rangeDiff = np.abs(np.diff(self.frontHalfRanges))
         # np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))

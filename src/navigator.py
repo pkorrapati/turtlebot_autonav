@@ -98,10 +98,10 @@ class Turtlebot_Movement:
         cv2.circle(self.current_frame,(int(self.top_centroid_x), int(self.top_centroid_y)), 5,(245,10,10),-1)
         cv2.circle(self.current_frame,(int(self.middle_centroid_x), int(self.middle_centroid_y)), 5,(10,240,10),-1)
         cv2.circle(self.current_frame,(int(self.bottom_centroid_x), int(self.bottom_centroid_y)), 5,(10,10,255),-1)
-        cv2.imshow('Centroids',self.current_frame)
+        #cv2.imshow('Centroids',self.current_frame)
         if not self.missing_lower:
             global on_line; on_line = True
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
     def Angle(self):
         control_signals=[self.short_angle_controller.steer(self.path_angle[1]), self.mid_angle_controller.steer(self.path_angle[2]),self.long_angle_controller.steer(self.path_angle[3])]
         output=np.deg2rad(np.average(control_signals,weights=[3,1,5]))
@@ -167,9 +167,9 @@ class Line_Tracker:
     #    cv2.imshow(self.output_name+self.output_name,crop)
     #    cv2.waitKey(1)
        mask=cv2.inRange(crop,self.blue_lower,self.blue_upper)#Generates mask to exclude non-blue regions
-       edge_img=cv2.bitwise_and(crop,crop,mask=mask)#Maskes image
-       edge_img=cv2.filter2D(edge_img,ddepth=-1,kernel = self.kernel_edge_5)#Uses 5x5 edge detection filter
-       ret,edge_threshold=cv2.threshold(edge_img,30,255,cv2.THRESH_BINARY)
+    #    edge_img=cv2.bitwise_and(crop,crop,mask=mask)#Maskes image
+    #    edge_img=cv2.filter2D(edge_img,ddepth=-1,kernel = self.kernel_edge_5)#Uses 5x5 edge detection filter
+    #    ret,edge_threshold=cv2.threshold(edge_img,30,255,cv2.THRESH_BINARY)
        m = cv2.moments(mask, False)
        try:
             self.cx, self.cy = m['m10']/m['m00'], m['m01']/m['m00']
@@ -177,9 +177,9 @@ class Line_Tracker:
             self.cx, self.cy = self.width/2, self.height/2
        #print("Mask"+self.output_name+":")
        #print(self.cx)
-       cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(120,120,120),-1)
-       cv2.imshow(self.output_name,mask)
-       if np.sum(mask)<100:
+    #    cv2.circle(edge_threshold,(int(self.cx), int(self.cy)), 10,(120,120,120),-1)
+       #cv2.imshow(self.output_name,mask)
+       if np.sum(mask)<500:
            self.missingLower = True
        else:
            self.missingLower = False

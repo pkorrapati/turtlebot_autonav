@@ -31,11 +31,11 @@ class Sqawk:
         for (x,y,w,h) in stop_signs:
             cv2.rectangle(image_np, (x, y), (x+w, y+h), (255, 255, 0), 2)
 
-        cv2.namedWindow("screenshot", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('screenshot', 640, 480)
-        cv2.imshow('screenshot',image_np)
+        # cv2.namedWindow("screenshot", cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow('screenshot', 640, 480)
+        # cv2.imshow('screenshot',image_np)
 
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
 if __name__ == '__main__':
     try:
         polly=Sqawk()
