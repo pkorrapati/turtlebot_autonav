@@ -1,1 +1,5 @@
 src/parrot.py
+src/memory/coco.names
+src/memory/stop.png
+src/memory/yolov3.cfg
+src/memory/yolov3.weights
