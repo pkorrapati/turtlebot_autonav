@@ -26,9 +26,9 @@ USE_YOLO_CUDA = False # This enables YOLO-CUDA. Default: True
 
 ''' Turtlebot Parameters '''
 # CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
-CRASH_DIST = 0.40      # Actual robot is 0.105 in radius
+CRASH_DIST = 0.25      # Actual robot is 0.105 in radius
 # TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
-TURTLEBOT_WIDTH = 0.40 # Actual robot wheel to wheel width is 0.178
+TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
 CRASH_ANGLE = atan2(TURTLEBOT_WIDTH, (2 * CRASH_DIST))
 
 ''' LIDAR Parameters '''

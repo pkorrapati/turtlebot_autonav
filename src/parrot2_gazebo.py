@@ -8,7 +8,7 @@ from cv_bridge import CvBridge#Bridge to go between ros and opencv
 import numpy as np
 from std_msgs.msg import Bool
 # Load haar cascade xml file
-stop_sign_cascade = cv2.CascadeClassifier('/home/brandon/AuE_8230/git_ws/turtlebot_autonav/src/stop_sign_classifier_2.xml')
+stop_sign_cascade = cv2.CascadeClassifier('/turtle_ws/src/turtlebot_autonav/src/stop_sign_classifier_2.xml')
 
 class Sqawk:
     def __init__(self):
