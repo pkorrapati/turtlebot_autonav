@@ -13,7 +13,7 @@ LIDAR_INF = 5
 ##Global Variables##
 found_line = False
 on_line = False
-stop_sign = True
+stop_sign = False
 stopping = True
 # Scaling Function
 def scale(val, src, dst):
@@ -51,8 +51,8 @@ class Turtlebot_Movement:
         self.pub = rospy.Publisher('/cmd_vel_camera',Twist, queue_size=10)#Publisher Node
         self.pub_helm = rospy.Publisher('/helm/line',Bool, queue_size=10)#Publisher Node
         self.sub = rospy.Subscriber('/camera/image',Image,self.Move)
-        self.sub = rospy.Subscriber('/camera/rgb/image_raw',Image,self.Move)
-        self.sub_stop = rospy.Subscriber('/stop_sign',Bool,self.Flag_Setter)
+        #self.sub = rospy.Subscriber('/camera/rgb/image_raw',Image,self.Move)
+        self.sub_stop = rospy.Subscriber('/parrot/stop',Bool,self.Flag_Setter)
         self.sub_scan = rospy.Subscriber('/scan',LaserScan,self.Stopper)
         self.bridge = CvBridge()#CvBridge Function
         self.short_angle_controller = Controller()
@@ -108,8 +108,10 @@ class Turtlebot_Movement:
         #print(control_signals, output)
         return output
     def Flag_Setter(self,status):
-        if status == True:
+        #print(status)
+        if True:
             global stop_sign; stop_sign = True
+            print("seen stop sign")
     def Stopper(self,Scan):
         #print("Hi")
         if stop_sign == True:    
@@ -118,7 +120,7 @@ class Turtlebot_Movement:
             ranges[np.where(ranges == 0)] = LIDAR_INF
             print(np.average(ranges[285:290]))
             #print("Stop Checker")
-            if np.average(ranges[285:290])<3 and self.not_stopped:
+            if np.average(ranges[285:290])<0.6 and self.not_stopped:
                 print("stopping")
                 self.vel_msg.linear.x = 0
                 self.vel_msg.angular.z = 0
@@ -206,7 +208,7 @@ class traffic_sign:
             ranges[np.where(ranges == 0)] = LIDAR_INF
             print(np.average(ranges[285:290]))
             #print("Stop Checker")
-            if np.average(ranges[285:290])<3 and self.not_stopped:
+            if np.average(ranges[285:290])<0.6 and self.not_stopped:
                 print("stopping")
                 
                 self.vel_msg.linear.x = 0

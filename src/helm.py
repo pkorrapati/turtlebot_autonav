@@ -35,8 +35,8 @@ class helmsman:
         self.pub.publish(cmd_vel)
 if __name__ == '__main__':
     try:
-        #helm=helmsman()
-        #rospy.spin()
+        helm=helmsman()
+        rospy.spin()
         pass
     except rospy.ROSInterruptException:
         pass
