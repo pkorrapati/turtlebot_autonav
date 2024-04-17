@@ -124,7 +124,7 @@ class VisualCortex:
         # self.sub_image = rospy.Subscriber('/camera/image', Image, self.visualize)        
 
         ''' Publishers '''
-        self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.pub_motion = rospy.Publisher('/cmd_vel_obstacle', Twist, queue_size=10)
 
         self.isAwake = False    
         self.newEcho = False

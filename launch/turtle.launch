@@ -46,8 +46,9 @@
     <node pkg="turtlebot_autonav" type="parrot2.py" name ="parrot"/>
     <node pkg="turtlebot_autonav" type="motorcortex.py" name="motor_cortex"/>
     <node pkg="turtlebot_autonav" type="visualcortex.py" name="visual_cortex"/>
-    <node pkg="turtlebot_autonav" type="circadian.py" name="circadian"/>
-    <node pkg="turtlebot_autonav" type="navigator.py" name="navigator">
+
+    <node pkg="turtlebot_autonav" type="navigator.py" name="navigator"/>
+    <node pkg="turtlebot_autonav" type="circadian.py" name="circadian">
         <param name="pulseRate" value="1000"/>
     </node>
    

@@ -7,7 +7,6 @@ class helmsman:
         print("hi")
         self.current_state = False
         rospy.init_node('helm', anonymous=True)
-        self.rate = rospy.Rate(500)#Sets refresh rate
         self.pub = rospy.Publisher('/cmd_vel',Twist, queue_size=10)#Publisher Node
         self.obstacle = rospy.Subscriber('/cmd_vel_obstacle',Twist,self.Obs)
         self.camera = rospy.Subscriber('/cmd_vel_camera',Twist,self.Cam)
