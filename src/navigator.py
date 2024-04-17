@@ -197,9 +197,9 @@ class traffic_sign:
         self.pub = rospy.Publisher('/cmd_vel_camera',Twist, queue_size=10)#Publisher Node
         self.not_stopped = True
         self.vel_msg = Twist()
-    def Flag_Setter(self,status):
-        if status == True:
-            global stop_sign; stop_sign = True
+    # def Flag_Setter(self,status):
+    #     if status == True:
+    #         global stop_sign; stop_sign = True
     def Stopper(self,Scan):
         #print("Hi")
         if stop_sign == True:    

@@ -14,12 +14,12 @@ class Sqawk:
     def __init__(self):
         rospy.init_node('navigator.py', anonymous=True)
         self.pub = rospy.Publisher('/parrot/stop',Bool, queue_size=10)#Publisher Node
-        self.sub = rospy.Subscriber('/camera/image',Image,self.Stop_Check)
+        self.sub = rospy.Subscriber('/camera/rgb/image_raw',Image,self.Stop_Check)
         self.bridge = CvBridge()#CvBridge Function
     def Stop_Check(self,Image):
         image = self.bridge.imgmsg_to_cv2(Image)
         image_np = np.array(image)
-        image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+        # image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
         gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
 	    # Apply Gaussian filter
         gray_filered = cv2.GaussianBlur(gray, (5, 5), 0)
