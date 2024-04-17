@@ -29,22 +29,28 @@ plt.ion()
 #                    [-0.000044831,   -0.0051,        0.8913],
 #                    [-0.00000028155,-0.000012263,    0.0015]])
 
-H_flat = np.array([[-0.0012,        -0.0017,        0.3784],
-                   [-0.000044831,   -0.0051,        0.9256],
-                   [-0.000000235,-0.00001023,       0.0012]])
+# H_flat = np.array([[-0.0012,        -0.0017,        0.3784],
+#                    [-0.000044831,   -0.0051,        0.9256],
+#                    [-0.000000235,-0.00001023,       0.0012]])
+
+H_top = np.array([[0.00164532 ,	  -0.00105499  ,	0.61243226],
+                  [0.00000910 ,	  -0.00066733  ,	0.79049755],
+                  [0.000000063794 ,  -0.00000658386	 , 0.006006]])
+
+H_top = np.linalg.inv(H_top)
 
 class VisualCortex:
     def __init__(self):        
         rospy.init_node('visual_cortex', anonymous=True)
         
         ''' Subscribers '''
-        self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.analyze)
+        # self.sub_alive = rospy.Subscriber('/pulse', Pulse, self.analyze)
 
         # self.sub_image = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, self.visualize)
         self.sub_image = rospy.Subscriber('/camera/image', Image, self.visualize)        
 
         ''' Publishers '''
-        self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        # self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
         self.isAwake = False    
         self.newEcho = False
@@ -82,10 +88,11 @@ class VisualCortex:
             # ballLower = (0, 140, 80)
             # ballUpper = (180, 162, 180)
 
-            ballLower = (0, 120, 80)
-            ballUpper = (180, 182, 180)
+            ballLower = (20, 0, 0)
+            ballUpper = (40, 255, 200)
 
-            cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
+            # cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
+            cv_image = self.bridge.imgmsg_to_cv2(data)
             
             c_img = cv_image[230:, :] if cv_image.shape[0] >= 233 else cv_image
             c_img = cv_image
@@ -128,7 +135,7 @@ class VisualCortex:
             h,w,c = cv_image.shape
 
             self.cv_image = c_img #cv_image   
-            self.cv_image_T = cv2.warpPerspective(cv_image, H_flat, (w,h))
+            self.cv_image_T = cv2.warpPerspective(cv_image, H_top, (424,720))
             
             vNode.refresh = True
 

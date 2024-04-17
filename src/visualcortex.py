@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-
 import numpy as np
 import cv2
 
 import os
 import rospy
-
-# import imagezmq
 
 from math import pi, radians, atan2, atan, degrees
 
@@ -26,6 +23,7 @@ USE_YOLO_CUDA = True # This enables YOLO-CUDA. Default: True
 
 ''' Turtlebot Parameters '''
 # CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
+TURTLEBOT_RADIUS = 0 #0.12
 CRASH_DIST = 0.40      # Actual robot is 0.105 in radius
 # TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
 TURTLEBOT_WIDTH = 0.40 # Actual robot wheel to wheel width is 0.178
@@ -125,6 +123,7 @@ class VisualCortex:
 
         ''' Publishers '''
         self.pub_motion = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        # self.pub_motion = rospy.Publisher('/cmd_vel_obstacle', Twist, queue_size=10)
 
         self.isAwake = False    
         self.newEcho = False
@@ -270,7 +269,7 @@ class VisualCortex:
             self.newEcho = False
             self.refresh = True            
 
-        # self.pub_motion.publish(self.vel_msg)
+        self.pub_motion.publish(self.vel_msg)
 
     def visualize(self, data):         
         # print('image')       
@@ -442,6 +441,7 @@ class VisualCortex:
         # print(degrees((pi/2)- atan(-wall_eq[1])))
 
         self.rangeDiff = np.abs(np.diff(self.frontHalfRanges))
+        self.frontHalfRanges = np.subtract(self.frontHalfRanges, TURTLEBOT_RADIUS)
         # np.hstack((np.abs(np.subtract(self.frontHalfRanges[1:], self.frontHalfRanges[0:frontHalfCount-1])), [0]))
 
         # Zero front index in self.frontHalfRanges
