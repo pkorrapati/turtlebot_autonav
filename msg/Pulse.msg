@@ -1,1 +1,1 @@
-int8 rate
+int32 rate

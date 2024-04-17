@@ -148,8 +148,8 @@ class Line_Tracker:
    kernel_blur = np.array([[1/9,1/9,1/9],
                             [1/9,1/9,1/9],
                             [1/9,1/9,1/9]])
-   blue_lower = np.array([20,0,0])
-   blue_upper = np.array([30,230,150])
+   blue_lower = np.array([27,0,0])#Gazebo
+   blue_upper = np.array([255,255,255])   
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function

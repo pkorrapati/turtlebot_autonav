@@ -32,8 +32,9 @@ class Circadian:
 
 if __name__ == '__main__':
     try:
-        pul = rospy.get_param('~pulseRate', default=pulseRate)
-        cNode = Circadian(pul)
+        #pul = rospy.get_param('~pulseRate', default=pulseRate)
+        cNode = Circadian(1000)
+        print()
         cNode.stay_alive()
 
     except rospy.ROSInterruptException:
