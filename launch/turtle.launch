@@ -1,5 +1,25 @@
 <launch>
     <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+    <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector, karto, frontier_exploration]"/>
+    <arg name="configuration_basename" default="turtlebot3_lds_2d.lua"/>
+    <arg name="open_rviz" default="true"/>
+
+    <!-- TurtleBot3 -->
+    <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
+        <arg name="model" value="$(arg model)" />
+    </include>
+
+    <!-- SLAM: Gmapping, Cartographer, Hector, Karto, Frontier_exploration, RTAB-Map -->
+    <include file="$(find turtlebot3_slam)/launch/turtlebot3_$(arg slam_methods).launch">
+        <arg name="model" value="$(arg model)"/>
+        <arg name="configuration_basename" value="$(arg configuration_basename)"/>
+    </include>
+
+    <!-- rviz -->
+    <group if="$(arg open_rviz)"> 
+        <node pkg="rviz" type="rviz" name="rviz" required="true"
+            args="-d $(find turtlebot3_slam)/rviz/turtlebot3_$(arg slam_methods).rviz"/>
+    </group>
     <arg name="x_pos" default="-0.3"/>
     <arg name="y_pos" default="1.7"/>
     <arg name="z_pos" default="0.0"/>
@@ -8,25 +28,27 @@
     <arg name="y_pos" default="0"/>
     <arg name="z_pos" default="0"/>
     <arg name="yaw" default="0"/> -->
-
-
-    <include file="$(find gazebo_ros)/launch/empty_world.launch">
-        <arg name="world_name" value="$(find turtlebot_autonav)/worlds/turtlebot3_final.world"/>
+    <!-- <include file="$(find gazebo_ros)/launch/empty_world.launch"> -->
+        <!-- <arg name="world_name" value="$(find turtlebot_autonav)/worlds/turtlebot3_final.world"/> -->
         <!-- <arg name="world_name" value="$(find turtlebot_autonav)/worlds/straightCorridor.world"/> -->
-        <arg name="paused" value="false"/>
-        <arg name="use_sim_time" value="true"/>
-        <arg name="gui" value="true"/>
-        <arg name="headless" value="false"/>
-        <arg name="debug" value="false"/>
-    </include>
+        <!-- <arg name="paused" value="false"/> -->
+        <!-- <arg name="use_sim_time" value="true"/> -->
+        <!-- <arg name="gui" value="true"/> -->
+        <!-- <arg name="headless" value="false"/> -->
+        <!-- <arg name="debug" value="false"/> -->
+    <!-- </include> -->
 
     <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
 
     <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf"  args="-urdf -model turtlebot3_$(arg model) -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -Y $(arg yaw) -param robot_description" />
 
-    <!-- <node pkg="turtlebot_autonav" type="motorcortex.py" name="motor_cortex"/> -->
-    <!-- <node pkg="turtlebot_autonav" type="visualcortex.py" name="visual_cortex"/> -->
-    <node pkg="turtlebot_autonav" type="circadian.py" name="circadian">
+    <node pkg="turtlebot_autonav" type="helm.py" name="helm"/>
+    <node pkg="turtlebot_autonav" type="motorcortex.py" name="motor_cortex"/>
+    <node pkg="turtlebot_autonav" type="visualcortex.py" name="visual_cortex"/>
+    <node pkg="turtlebot_autonav" type="circadian.py" name="circadian"/>
+    <node pkg="turtlebot_autonav" type="navigator.py" name="navigator">
         <param name="pulseRate" value="100"/>
     </node>
+   
+  
 </launch>

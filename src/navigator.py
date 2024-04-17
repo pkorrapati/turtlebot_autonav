@@ -46,7 +46,7 @@ class Controller:
         return output
 class Turtlebot_Movement:
     def __init__(self):
-        rospy.init_node('line_recognition=.py', anonymous=True)
+        rospy.init_node('navigator.py', anonymous=True)
         self.rate = rospy.Rate(60)#Sets refresh rate
         self.pub = rospy.Publisher('/cmd_vel_camera',Twist, queue_size=10)#Publisher Node
         self.pub_helm = rospy.Publisher('/helm/line',Bool, queue_size=10)#Publisher Node
