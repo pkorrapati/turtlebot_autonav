@@ -222,6 +222,7 @@ class VisualCortex:
                     segCents = np.vstack((segCents, [acS, dcS]))
             
             targI = np.argmax(segCents[:,1])
+            targA = np.argmax(np.multiply(segCents[:,1], segCents[:,0]))
 
             if PLOT_THINGS:     
                 self.distaPlot.set_xdata(self.frontHalfAngles)
@@ -236,11 +237,11 @@ class VisualCortex:
                 self.distbPlot2.set_xdata(self.ac)
                 self.distbPlot2.set_ydata(self.dc)   
 
-                self.distaPlot2.set_xdata(segCents[:,0])
-                self.distaPlot2.set_ydata(segCents[:,1]) 
+                # self.distaPlot2.set_xdata(segCents[:,0])
+                # self.distaPlot2.set_ydata(segCents[:,1]) 
 
-                self.distbPlot2.set_xdata(segCents[:,0])
-                self.distbPlot2.set_ydata(segCents[:,1])   
+                # self.distbPlot2.set_xdata(segCents[:,0])
+                # self.distbPlot2.set_ydata(segCents[:,1])   
 
                 # self.obstaPlot.set_xdata(self.frontHalfAngles[:-1])
                 # self.obstaPlot.set_ydata(self.rangeDiff)
@@ -264,11 +265,14 @@ class VisualCortex:
                 # self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
                 # self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
             else:
+                # print('crash')
                 self.vel_msg.linear.x = 0
-                self.vel_msg.angular.z = 0.1
+                self.vel_msg.angular.z = 0.4 * segCents[targI, 0]
+                # self.vel_msg.angular.z = 0.1
 
             self.newEcho = False
             self.refresh = True            
+
 
         self.pub_motion.publish(self.vel_msg)
 
@@ -435,10 +439,11 @@ class VisualCortex:
         # front scan
         self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
         self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
+
         # print(self.crashScan)
 
-        X, Y = cylToCart(self.crashRegion, self.crashScan)
-        wall_eq = fitLine(X, Y)
+        # X, Y = cylToCart(self.crashRegion, self.crashScan)
+        # wall_eq = fitLine(X, Y)
 
         # print(degrees((pi/2)- atan(-wall_eq[1])))
 
