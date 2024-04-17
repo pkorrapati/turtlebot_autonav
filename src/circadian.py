@@ -4,10 +4,10 @@ import rospy
 
 from turtlebot_autonav.msg import Pulse
 
-pulseRate = 100
+pulseRate = 1000
 
 class Circadian:
-    def __init__(self, beatsPerSecond=100):
+    def __init__(self, beatsPerSecond=1000):
         # Creates a unique node 'motor_cortex' by using anonymous=True
         rospy.init_node('circadian', anonymous=True)
 
