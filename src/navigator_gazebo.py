@@ -50,7 +50,7 @@ class Turtlebot_Movement:
         self.rate = rospy.Rate(60)#Sets refresh rate
         self.pub = rospy.Publisher('/cmd_vel_camera',Twist, queue_size=10)#Publisher Node
         self.pub_helm = rospy.Publisher('/helm/line',Bool, queue_size=10)#Publisher Node
-        self.sub = rospy.Subscriber('/camera/image',Image,self.Move)
+        self.sub = rospy.Subscriber('/camera/rgb/image_raw',Image,self.Move)
         #self.sub = rospy.Subscriber('/camera/rgb/image_raw',Image,self.Move)
         self.sub_stop = rospy.Subscriber('/parrot/stop',Bool,self.Flag_Setter)
         self.sub_scan = rospy.Subscriber('/scan',LaserScan,self.Stopper)
@@ -98,10 +98,10 @@ class Turtlebot_Movement:
         cv2.circle(self.current_frame,(int(self.top_centroid_x), int(self.top_centroid_y)), 5,(245,10,10),-1)
         cv2.circle(self.current_frame,(int(self.middle_centroid_x), int(self.middle_centroid_y)), 5,(10,240,10),-1)
         cv2.circle(self.current_frame,(int(self.bottom_centroid_x), int(self.bottom_centroid_y)), 5,(10,10,255),-1)
-        #cv2.imshow('Centroids',self.current_frame)
+        cv2.imshow('Centroids',self.current_frame)
         if not self.missing_lower:
             global on_line; on_line = True
-        #cv2.waitKey(1)
+        cv2.waitKey(1)
     def Angle(self):
         control_signals=[self.short_angle_controller.steer(self.path_angle[1]), self.mid_angle_controller.steer(self.path_angle[2]),self.long_angle_controller.steer(self.path_angle[3])]
         output=np.deg2rad(np.average(control_signals,weights=[3,1,5]))

@@ -26,9 +26,9 @@ USE_YOLO_CUDA = False # This enables YOLO-CUDA. Default: True
 
 ''' Turtlebot Parameters '''
 # CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
-CRASH_DIST = 0.20      # Actual robot is 0.105 in radius
+CRASH_DIST = 0.40      # Actual robot is 0.105 in radius
 # TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
-TURTLEBOT_WIDTH = 0.20 # Actual robot wheel to wheel width is 0.178
+TURTLEBOT_WIDTH = 0.40 # Actual robot wheel to wheel width is 0.178
 CRASH_ANGLE = atan2(TURTLEBOT_WIDTH, (2 * CRASH_DIST))
 
 ''' LIDAR Parameters '''
@@ -222,6 +222,7 @@ class VisualCortex:
                     segCents = np.vstack((segCents, [acS, dcS]))
             
             targI = np.argmax(segCents[:,1])
+            targA = np.argmax(np.multiply(segCents[:,1], segCents[:,0]))
 
             if PLOT_THINGS:     
                 self.distaPlot.set_xdata(self.frontHalfAngles)
@@ -236,11 +237,11 @@ class VisualCortex:
                 self.distbPlot2.set_xdata(self.ac)
                 self.distbPlot2.set_ydata(self.dc)   
 
-                self.distaPlot2.set_xdata(segCents[:,0])
-                self.distaPlot2.set_ydata(segCents[:,1]) 
+                # self.distaPlot2.set_xdata(segCents[:,0])
+                # self.distaPlot2.set_ydata(segCents[:,1]) 
 
-                self.distbPlot2.set_xdata(segCents[:,0])
-                self.distbPlot2.set_ydata(segCents[:,1])   
+                # self.distbPlot2.set_xdata(segCents[:,0])
+                # self.distbPlot2.set_ydata(segCents[:,1])   
 
                 # self.obstaPlot.set_xdata(self.frontHalfAngles[:-1])
                 # self.obstaPlot.set_ydata(self.rangeDiff)
@@ -264,11 +265,14 @@ class VisualCortex:
                 # self.vel_msg.angular.z = 0.09 * self.ac #segCents[targI, 0]
                 # self.vel_msg.angular.z = 0.12 * self.ac #segCents[targI, 0]
             else:
+                # print('crash')
                 self.vel_msg.linear.x = 0
-                self.vel_msg.angular.z = 0.1
+                self.vel_msg.angular.z = 0.4 * segCents[targI, 0]
+                # self.vel_msg.angular.z = 0.1
 
             self.newEcho = False
             self.refresh = True            
+
 
         self.pub_motion.publish(self.vel_msg)
 
@@ -435,10 +439,11 @@ class VisualCortex:
         # front scan
         self.crashScan = extractRanges(ranges, fIndx, self.fMinsIndx, self.fPlusIndx)
         self.crashRegion = np.linspace(self.fAngle - self.fMins, self.fAngle + self.fPlus, num=len(self.crashScan))
+
         # print(self.crashScan)
 
-        X, Y = cylToCart(self.crashRegion, self.crashScan)
-        wall_eq = fitLine(X, Y)
+        # X, Y = cylToCart(self.crashRegion, self.crashScan)
+        # wall_eq = fitLine(X, Y)
 
         # print(degrees((pi/2)- atan(-wall_eq[1])))
 
@@ -455,7 +460,16 @@ if __name__ == '__main__':
     try:
         vNode = VisualCortex()
 
-        rospy.spin()            
+        while not rospy.is_shutdown():
+            if vNode.refresh and PLOT_THINGS:
+                vNode.cx.set_data(vNode.cv_image)
+                vNode.cx.autoscale()
+
+                vNode.fig.canvas.draw()
+                vNode.fig.canvas.flush_events()
+
+                plt.subplots_adjust(bottom=0.1, top=0.9)
+                vNode.refresh = False                
         
     except rospy.ROSInterruptException:
         pass
