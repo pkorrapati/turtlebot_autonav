@@ -28,7 +28,7 @@ USE_YOLO_CUDA = False # This enables YOLO-CUDA. Default: True
 # CRASH_DIST = 0.18      # Actual robot is 0.105 in radius
 CRASH_DIST = 0.40      # Actual robot is 0.105 in radius
 # TURTLEBOT_WIDTH = 0.23 # Actual robot wheel to wheel width is 0.178
-TURTLEBOT_WIDTH = 0.40 # Actual robot wheel to wheel width is 0.178
+TURTLEBOT_WIDTH = 0.35 # Actual robot wheel to wheel width is 0.178
 CRASH_ANGLE = atan2(TURTLEBOT_WIDTH, (2 * CRASH_DIST))
 
 ''' LIDAR Parameters '''
@@ -267,8 +267,8 @@ class VisualCortex:
             else:
                 # print('crash')
                 self.vel_msg.linear.x = 0
-                self.vel_msg.angular.z = 0.4 * segCents[targI, 0]
-                # self.vel_msg.angular.z = 0.1
+                # self.vel_msg.angular.z = 0.4 * segCents[targI, 0]
+                self.vel_msg.angular.z = 0.1
 
             self.newEcho = False
             self.refresh = True            

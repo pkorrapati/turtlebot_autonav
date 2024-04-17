@@ -148,8 +148,8 @@ class Line_Tracker:
    kernel_blur = np.array([[1/9,1/9,1/9],
                             [1/9,1/9,1/9],
                             [1/9,1/9,1/9]])
-   blue_lower = np.array([20,0,0])
-   blue_upper = np.array([30,230,150])
+   blue_lower = np.array([15,30,60])
+   blue_upper = np.array([50,170,255])
 
    def __init__(self,upper_bound_decimal, lower_bound_decimal,image_stream,output_name):
        self.bridge = CvBridge()#CvBridge Function
@@ -192,7 +192,7 @@ class Line_Tracker:
    
 class traffic_sign:
     def __init__(self):
-        self.sub = rospy.Subscriber('/stop_sign',Bool,self.Flag_Setter)
+        # self.sub = rospy.Subscriber('/stop_sign',Bool,self.Flag_Setter)
         self.sub = rospy.Subscriber('/scan',LaserScan,self.Stopper)
         self.pub = rospy.Publisher('/cmd_vel_camera',Twist, queue_size=10)#Publisher Node
         self.not_stopped = True
